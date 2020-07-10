@@ -140,6 +140,7 @@ cython_debug/
 .idea
 
 *_amd64
+*.exe
 
 bak/
 
