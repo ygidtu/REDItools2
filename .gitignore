@@ -138,3 +138,10 @@ dmypy.json
 cython_debug/
 
 .idea
+
+*_amd64
+
+bak/
+
+*_test.go
+test/

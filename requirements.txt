@@ -1,5 +1,0 @@
-pysam
-sortedcontainers
-psutil
-netifaces
-mpi4py
