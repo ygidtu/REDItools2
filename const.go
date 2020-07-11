@@ -286,10 +286,6 @@ func (e *EditsInfo) AddReads(record *Record, at int) {
 		}
 	}
 	e.Total++
-
-	// if e.Pos == 1115863 {
-	// 	sugar.Infof("%d add %d", e.Pos, e.Total)
-	// }
 }
 
 func (e *EditsInfo) MeanQ() float64 {

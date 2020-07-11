@@ -13,7 +13,7 @@ import (
 )
 
 func writer(w chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
+	sugar.Infof("write into %s", conf.Output)
 	mode := os.O_CREATE | os.O_WRONLY
 	if conf.Append {
 		mode = mode | os.O_APPEND
@@ -27,19 +27,30 @@ func writer(w chan string, wg *sync.WaitGroup) {
 	}
 	defer f.Close()
 
-	writer := bufio.NewWriter(f)
+	var gwriter *gzip.Writer
+	var writer *bufio.Writer
+
 	if strings.HasSuffix(conf.Output, "gz") {
-		writer = bufio.NewWriter(gzip.NewWriter(f))
+		gwriter = gzip.NewWriter(f)
+		defer gwriter.Flush()
+		defer gwriter.Close()
+	} else {
+		writer = bufio.NewWriter(f)
+		defer writer.Flush()
 	}
 
 	if !conf.RemoveHeader {
-		_, err = writer.WriteString(strings.Join(getHeader(), "\t") + "\n")
+		if gwriter != nil {
+			_, err = gwriter.Write([]byte(strings.Join(getHeader(), "\t") + "\n"))
+		} else {
+			_, err = writer.WriteString(strings.Join(getHeader(), "\t") + "\n")
+		}
+
 		if err != nil {
 			sugar.Fatal(err)
 		} else {
 			sugar.Debug("write title")
 		}
-		writer.Flush()
 	}
 
 	done := 0
@@ -60,9 +71,16 @@ func writer(w chan string, wg *sync.WaitGroup) {
 			}
 		}
 
-		_, _ = writer.WriteString(line + "\n")
-		_ = writer.Flush()
+		if gwriter == nil {
+			_, _ = writer.WriteString(line + "\n")
+		} else {
+			gwriter.Write([]byte(line + "\n"))
+		}
+
 	}
+
+	_ = f.Sync()
+	wg.Done()
 }
 
 func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPositions, splicePositions, targetPositions map[string]*set.Set) {
@@ -92,10 +110,6 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 			sugar.Fatal(err)
 		}
 
-		// if ref.Chrom == "chr1" {
-		// 	sugar.Info(string(chrRef[1115714:1115717]))
-		// }
-
 		lastEnd := 0
 		total := 0
 		edits := make(map[int]*EditsInfo)
@@ -112,15 +126,8 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 				continue
 			}
 
-			// if record.Start <= 1115715 {
-			// 	sugar.Info(record)
-			// } else {
-			// 	break
-			// }
-
 			start, index := 0, 0
 			for _, i := range record.Cigar {
-				// sugar.Info(i.String())
 				if i.Type() == sam.CigarMatch {
 					for j := 1; j <= i.Len(); j++ {
 						at := index + j - 1
@@ -134,10 +141,6 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 
 						genomic := start + record.Start
 
-						// if genomic <= 1115866 {
-						// 	sugar.Infof("%d %d", start, genomic)
-						// }
-
 						if _, ok := edits[genomic]; !ok {
 							edits[genomic] = NewEditsInfo(ref.Chrom, chrRef[genomic-1], genomic)
 						}
@@ -148,10 +151,6 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 					index += i.Len()
 				} else if i.Type() != sam.CigarDeletion || i.Type() != sam.CigarHardClipped || i.Type() != sam.CigarInsertion {
 					start += i.Len()
-
-					// if i.Type() == sam.CigarSkipped {
-					// 	sugar.Infof("Skip: %d", start)
-					// }
 				}
 			}
 
@@ -223,10 +222,9 @@ func main() {
 	sugar.Infof("Narrowing REDItools to region %s", region.String())
 
 	var wg sync.WaitGroup
-	wg.Add(1)
 	w := make(chan string)
+	wg.Add(1)
 	go writer(w, &wg)
-
 	refs := make(chan *Region)
 
 	for i := 0; i < conf.Process; i++ {
