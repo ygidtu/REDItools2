@@ -21,90 +21,6 @@ func withinInterval(i int) bool {
 	return region.Start <= i && i <= region.End
 }
 
-//func updateReads(reads map[int][]Record, i int) (map[int][]Record, error) {
-//	//timer := InitTimer()
-//	//timer.Tic()
-//	res := make(map[int][]Record)
-//
-//	for _, values := range reads {
-//		for _, read := range values {
-//			if len(read.Cigar) == 0 {
-//				continue
-//			}
-//
-//			if read.Pos >= i {
-//				continue
-//			}
-//
-//			block := read.Cigar[0]
-//			op := block.Type()
-//			switch op {
-//			case sam.CigarSoftClipped: // S
-//				read.Cigar = read.Cigar[1:]
-//				if len(read.Cigar) > 0 {
-//					block = read.Cigar[0]
-//				} else {
-//					block = sam.NewCigarOp(sam.CigarMismatch, -1)
-//				}
-//			case sam.CigarSkipped: // N
-//				read.Pos += block.Len()
-//				read.Cigar = read.Cigar[1:]
-//
-//				read.Ref = ""
-//				read.Alt = ""
-//				continue
-//			}
-//
-//			if block.Len() != -1 && op == sam.CigarInsertion { // I
-//				read.QueryAlignmentIndex += block.Len()
-//				read.Ref = ""
-//				read.Alt = read.SeqAtString(read.QueryAlignmentIndex)
-//				read.Cigar = read.Cigar[1:]
-//				if len(read.Cigar) > 0 {
-//					block = read.Cigar[0]
-//				} else {
-//					block = sam.NewCigarOp(sam.CigarMismatch, -1)
-//				}
-//			} else if block.Len() != -1 {
-//				switch op {
-//				case sam.CigarMatch: // M
-//					read.Pos += 1
-//					read.ReferenceIndex += 1
-//					read.QueryAlignmentIndex += 1
-//
-//					read.Ref = read.RefAtString(read.ReferenceIndex)
-//					read.Alt = read.SeqAtString(read.QueryAlignmentIndex)
-//
-//					if block.Len() == 1 {
-//						read.Cigar = read.Cigar[1:]
-//					}
-//				case sam.CigarDeletion:  // D
-//					read.Pos += block.Len()
-//					read.Ref = ""
-//					read.Alt = ""
-//					read.Cigar = read.Cigar[1:]
-//				}
-//			}
-//
-//			if read.Alt != "" {
-//				read.Alt = strings.ToUpper(read.Alt)
-//			}
-//			if read.Ref != "" {
-//				read.Ref = strings.ToUpper(read.Ref)
-//			}
-//
-//			temp, ok := res[read.Pos]
-//			if !ok {
-//				temp = make([]Record, 0, 0)
-//			}
-//			temp = append(temp, read)
-//			res[read.Pos] = temp
-//		}
-//	}
-//	//timer.Toc()
-//	//sugar.Debugf("update reads spend: %v", timer.TicToc())
-//	return res, nil
-//}
 
 func prop(tot, va int) float64 {
 	if tot == 0 {
@@ -203,11 +119,7 @@ func getColumn(edits map[int]*EditsInfo, positions []map[string]*set.Set, target
 		if !ok {
 			continue
 		}
-
-		// if key == 1115863 {
-		// 	sugar.Info(edit)
-		// }
-
+		
 		if edit.Ref == byte('N') {
 			continue
 		}

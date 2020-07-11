@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
 	"os"
 	"strings"
 	"sync"
@@ -20,13 +21,16 @@ func writer(w chan string, wg *sync.WaitGroup) {
 		mode = mode | os.O_TRUNC
 	}
 
-	f, err := os.OpenFile(conf.Output, mode, 0755)
+	f, err := os.OpenFile(conf.Output, mode, 0644)
 	if err != nil {
 		sugar.Fatalf("failed to open %s: %s", conf.Output, err.Error())
 	}
 	defer f.Close()
 
 	writer := bufio.NewWriter(f)
+	if strings.HasSuffix(conf.Output, "gz") {
+		writer = bufio.NewWriter(gzip.NewWriter(f))
+	}
 
 	if !conf.RemoveHeader {
 		_, err = writer.WriteString(strings.Join(getHeader(), "\t") + "\n")
