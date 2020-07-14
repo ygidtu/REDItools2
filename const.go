@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/biogo/hts/bgzf"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.01"
+	VERSION            = "0.0.2"
 	DefaultBaseQuality = 30
 )
 
@@ -122,6 +123,16 @@ func decodeRegion(region string) *Region {
 
 	return res
 }
+
+
+type ChanChunk struct {
+	Ref string
+	Start int
+	End int
+	Chunks bgzf.Chunk
+}
+
+
 
 type Omopolymeric struct {
 	Chromosome string
