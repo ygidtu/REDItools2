@@ -20,13 +20,14 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.0.2-beta"
+	VERSION            = "0.0.3-beta"
 	DefaultBaseQuality = 30
 )
 
 type config struct {
 	Config                 string  `goptions:"-c, --config, description='Config file'"`
 	Version                bool    `goptions:"-v, --version, description='Show version'"`
+	Mode                   bool    `goptions:"--fast, description='Usage fast mode with higher memory usage'"`
 	Debug                  bool    `goptions:"--debug, description='Show debug info'" long:"debug" description:"Config file"`
 	File                   string  `goptions:"-f, --file, description='The bam file to be analyzed'"`
 	Output                 string  `goptions:"-o, --output-file, description='The output statistics file'"`
