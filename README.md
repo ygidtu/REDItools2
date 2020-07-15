@@ -1,5 +1,18 @@
 # REDItools2
 
+**Created at 2020.07.14**
+
+
+A go version of REDItools2
+
+1. Too much faster. 
+    - The original Python version takes 3mins
+    - The `multiprocessing version` in previous commits, takes 1m22s with 10 processes
+    - The go version takes 1min with 1 process, 7~9s with 10 processes
+2. More information, even more editing sites.
+
+---
+
 **REDItools2** is the optimized, parallel multi-node version of [<i class="icon-link"></i> REDItools](https://github.com/BioinfoUNIBA/REDItools).
 
 REDItools takes in input a RNA-Seq (or DNA-Seq BAM) file and outputs a table of RNA-Seq editing events.  Here is an example of REDItools's output:

@@ -101,8 +101,17 @@ func worker(
 			break
 		}
 
+		//chrRef, err := fetchFasta(ref.ToRegion())
+		//if err != nil {
+		//	sugar.Warnf("try to modify %s", ref)
+		//	chrRef, err = fetchFasta(ref.SwitchRegion())
+		//}
+		//if err != nil {
+		//	sugar.Fatal(err)
+		//}
+
 		chrRef, ok := chrRefs[ref.Ref]
-		if ! ok {
+		if !ok {
 			sugar.Errorf("failed to get %s from reference", ref.Ref)
 			continue
 		}
@@ -139,8 +148,6 @@ func worker(
 							sugar.Fatal(record.SeqString())
 						}
 
-						// record.QueryPosition = append(record.QueryPosition, at)
-
 						genomic := start + record.Start
 
 						if _, ok := edits[genomic]; !ok {
@@ -170,12 +177,13 @@ func worker(
 	w <- "done"
 }
 
-
 func main() {
 	conf = defaultConfig()
 	goptions.ParseAndFail(&conf)
 
 	setLogger(conf.Debug, conf.Log)
+
+	sugar.Debugf("options: %v", conf)
 
 	if conf.Version {
 		sugar.Infof("current version: %v", VERSION)
@@ -253,7 +261,7 @@ func main() {
 			lock.Lock()
 			chrRefs[ref] = temp
 			lock.Unlock()
-		} (ref, &wg, &lock)
+		}(ref, &wg, &lock)
 	}
 
 	wg.Wait()
@@ -266,18 +274,13 @@ func main() {
 		wg.Add(1)
 	}
 
-	if references, err := fetchBamRefs(); err == nil {
-		for ref, chunks := range references {
-			sugar.Infof("read reads from %s", ref)
-			for _, c := range chunks {
-				sugar.Debug(c)
-				refs <- c
-			}
+	for ref, chunks := range references {
+		sugar.Infof("read reads from %s", ref)
+		for _, c := range chunks {
+			sugar.Debug(c)
+			refs <- c
 		}
-	} else {
-		sugar.Error(err)
 	}
-
 
 	close(refs)
 	wg.Wait()

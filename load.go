@@ -387,9 +387,9 @@ func splitRegion(end, chunks int) []int {
 }
 
 // adjustRegion is used to move the end site a little backwards
-func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *bam.Reader) ([]bgzf.Chunk, error) {
+func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *bam.Reader) ([]*ChanChunk, error) {
 
-	res := make([]bgzf.Chunk, 0, 0)
+	res := make([]*ChanChunk, 0, 0)
 	for i := 0; i < len(regions); i++ {
 		if i > 0 && i < len(regions)-1 {
 			chunks, err := idx.Chunks(ref, regions[i], regions[i+1])
@@ -402,7 +402,6 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 			if len(chunks) == 0 {
 				continue
 			}
-
 
 			iter, err := bam.NewIterator(bamReader, chunks)
 			if err != nil {
@@ -427,12 +426,28 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 	}
 
 	for i := 1; i < len(regions); i++ {
+		// avoid duplicated regions
+		if regions[i-1] > regions[i] {
+			regions[i] = regions[i-1]
+			continue
+		}
+
 		chunks, err := idx.Chunks(ref, regions[i-1], regions[i])
 		if err != nil {
 			continue
 			// return res, errors.Wrapf(err, "failed after adjust %s: %d - %d", ref.Name(), region[i-1], region[i])
 		}
-		res = append(res, chunks...)
+		//res = append(res, chunks...)
+
+		for _, c := range chunks {
+			res = append(res, &ChanChunk{
+				Ref:    ref.Name(),
+				Start:  regions[i-1],
+				End:    regions[i],
+				Chunks: c,
+			})
+		}
+
 	}
 
 	return res, nil
@@ -498,12 +513,7 @@ func fetchBamRefs() (map[string][]*ChanChunk, error) {
 			continue
 		}
 
-		tempRes := make([]*ChanChunk, 0, 0)
-		for _, t := range temp {
-			tempRes = append(tempRes, &ChanChunk{Ref: ref.Name(), Chunks: t})
-		}
-
-		res[ref.Name()] = tempRes
+		res[ref.Name()] = temp
 	}
 
 	sugar.Debug(res)
