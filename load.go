@@ -103,7 +103,7 @@ func loadBedFile() (map[string]*set.Set, error) {
 		// Add target positions
 		temp, ok := targetPosition[chr]
 		if !ok {
-			temp = &set.Set{}
+			temp = set.New()
 		}
 
 		j := intersectionStart
@@ -197,7 +197,7 @@ func createOmopolymericPositions() error {
 		}
 	}
 
-	sugar.Infof("%s total omopolymeric positions found.", len(positions))
+	sugar.Infof("%d total omopolymeric positions found.", len(positions))
 
 	sugar.Infof("Writing omopolymeric positions to file: %s.", conf.OmopolymericFile)
 
@@ -274,7 +274,7 @@ func loadOmopolymericPositions() (map[string]*set.Set, error) {
 
 			temp, ok := positions[chrom]
 			if !ok {
-				temp = &set.Set{}
+				temp = set.New()
 			}
 
 			j := f
@@ -340,7 +340,7 @@ func loadSplicingPositions() (map[string]*set.Set, error) {
 
 		temp, ok := res[chrom]
 		if !ok {
-			temp = &set.Set{}
+			temp = set.New()
 		}
 
 		st, tp := lines[4], lines[3]
