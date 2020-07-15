@@ -28,23 +28,18 @@ func writer(w chan string, wg *sync.WaitGroup) {
 	defer f.Close()
 
 	var gwriter *gzip.Writer
-	var writer *bufio.Writer
+	writer := bufio.NewWriter(f)
+	defer writer.Flush()
 
 	if strings.HasSuffix(conf.Output, "gz") {
 		gwriter = gzip.NewWriter(f)
 		defer gwriter.Flush()
 		defer gwriter.Close()
-	} else {
-		writer = bufio.NewWriter(f)
-		defer writer.Flush()
+		writer = bufio.NewWriter(gwriter)
 	}
-
 	if !conf.RemoveHeader {
-		if gwriter != nil {
-			_, err = gwriter.Write([]byte(strings.Join(getHeader(), "\t") + "\n"))
-		} else {
-			_, err = writer.WriteString(strings.Join(getHeader(), "\t") + "\n")
-		}
+
+		_, err = writer.WriteString(strings.Join(getHeader(), "\t") + "\n")
 
 		if err != nil {
 			sugar.Fatal(err)
@@ -71,15 +66,9 @@ func writer(w chan string, wg *sync.WaitGroup) {
 			}
 		}
 
-		if gwriter == nil {
-			_, _ = writer.WriteString(line + "\n")
-		} else {
-			gwriter.Write([]byte(line + "\n"))
-		}
-
+		_, _ = writer.WriteString(line + "\n")
 	}
 
-	_ = f.Sync()
 	wg.Done()
 }
 

@@ -19,7 +19,7 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.01"
+	VERSION            = "0.0.2-low memory"
 	DefaultBaseQuality = 30
 )
 
@@ -37,21 +37,21 @@ type config struct {
 	Region                 string  `goptions:"-g, --region, description='The region of the bam file to be analyzed'"`
 	OmopolymericFile       string  `goptions:"-m, --omopolymeric-file, description='The file containing the omopolymeric positions'"`
 	CreateOmopolymericFile bool    `goptions:"-c, --create-omopolymeric-file, description='Whether to create the omopolymeric span'"`
-	OmopolymericSpan       int     `goptions:"-os, --omopolymeric-span, description='The omopolymeric span'"`
-	SplicingFile           string  `goptions:"-sf, --splicing-file, description='The file containing the splicing sites positions'"`
-	SplicingSpan           int     `goptions:"-ss, --splicing-span, description='The splicing span'"`
-	MinReadLength          int     `goptions:"-mrl, --min-read-length, description='The minimum read length. Reads whose length is below this value will be discarded.'"`
+	OmopolymericSpan       int     `goptions:"--omopolymeric-span, description='The omopolymeric span'"`
+	SplicingFile           string  `goptions:"--splicing-file, description='The file containing the splicing sites positions'"`
+	SplicingSpan           int     `goptions:"--splicing-span, description='The splicing span'"`
+	MinReadLength          int     `goptions:"--min-read-length, description='The minimum read length. Reads whose length is below this value will be discarded.'"`
 	MinReadQuality         int     `goptions:"-q, --min-read-quality, description='The minimum read quality. Reads whose mapping quality is below this value will be discarded.'"`
-	MinBaseQuality         int     `goptions:"-bq, --min-base-quality, description='The minimum base quality. Bases whose quality is below this value will not be included in the analysis.'"`
-	MinBasePosition        int     `goptions:"-mbp, --min-base-position, description='The minimum base position. Bases which reside in a previous position (in the read) will not be included in the analysis.'"`
-	MaxBasePosition        int     `goptions:"-Mbp, --max-base-position, description='The maximum base position. Bases which reside in a further position (in the read) will not be included in the analysis.'"`
-	MinColumnLength        int     `goptions:"-l, --min-column-length, description='The minimum length of editing column (per position). Positions whose columns have length below this value will not be included in the analysis.'"`
-	MinEditsPerNucleotide  int     `goptions:"-men, --min-edits-per-nucleotide, description='The minimum number of editing for events each nucleotide (per position). Positions whose columns have bases with less than min-edits-per-base edits will not be included in the analysis.'"`
-	MinEdits               int     `goptions:"-me, --min-edits, description='The minimum number of editing events (per position). Positions whose columns have bases with less than \'min-edits-per-base edits\' will not be included in the analysis.'"`
-	MaxEditsPerNucleotide  int     `goptions:"-Men, --max-editing-nucleotides, description='The maximum number of editing nucleotides, from 0 to 4 (per position). Positions whose columns have more than \'max-editing-nucleotides\' will not be included in the analysis.'"`
+	MinBaseQuality         int     `goptions:"--min-base-quality, description='The minimum base quality. Bases whose quality is below this value will not be included in the analysis.'"`
+	MinBasePosition        int     `goptions:"--min-base-position, description='The minimum base position. Bases which reside in a previous position (in the read) will not be included in the analysis.'"`
+	MaxBasePosition        int     `goptions:"--max-base-position, description='The maximum base position. Bases which reside in a further position (in the read) will not be included in the analysis.'"`
+	MinColumnLength        int     `goptions:"--min-column-length, description='The minimum length of editing column (per position). Positions whose columns have length below this value will not be included in the analysis.'"`
+	MinEditsPerNucleotide  int     `goptions:"--min-edits-per-nucleotide, description='The minimum number of editing for events each nucleotide (per position). Positions whose columns have bases with less than min-edits-per-base edits will not be included in the analysis.'"`
+	MinEdits               int     `goptions:"--min-edits, description='The minimum number of editing events (per position). Positions whose columns have bases with less than \'min-edits-per-base edits\' will not be included in the analysis.'"`
+	MaxEditsPerNucleotide  int     `goptions:"--max-editing-nucleotides, description='The maximum number of editing nucleotides, from 0 to 4 (per position). Positions whose columns have more than \'max-editing-nucleotides\' will not be included in the analysis.'"`
 	StrandConfidence       int     `goptions:"-T, --strand-confidence, description='Strand inference type 1:maxValue 2:useConfidence [1]; maxValue: the most prominent strand count will be used; useConfidence: strand is assigned if over a prefixed frequency confidence (-TV option)'"`
 	StrandCorrection       bool    `goptions:"-C, --strand-corection, description='Strand correction. Once the strand has been inferred, only bases according to this strand will be selected.'"`
-	StrandConfidenceValue  float64 `goptions:"-Tv, --strand-confidence-value, description='Strand confidence [0.70]'"`
+	StrandConfidenceValue  float64 `goptions:"--strand-confidence-value, description='Strand confidence [0.70]'"`
 	RemoveHeader           bool    `goptions:"-H, --remove-header, description='Do not include header in output file'"`
 	Dna                    bool    `goptions:"-N, --dna, description='Run REDItools 2.0 on DNA-Seq data'"`
 	BedFile                string  `goptions:"-B, --bed_file, description='Path of BED file containing target regions'"`
