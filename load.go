@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/biogo/biogo/alphabet"
 	"github.com/biogo/biogo/io/seqio"
@@ -17,15 +18,10 @@ import (
 	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/bgzf"
 	"github.com/biogo/hts/fai"
-	"github.com/cheggaaa/pb/v3"
+	"github.com/biogo/hts/sam"
 	"github.com/golang-collections/collections/set"
 	"github.com/pkg/errors"
-	"io"
-	"math"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
+	"github.com/schollz/progressbar/v3"
 )
 
 // loadBedFile is function that load bed files
@@ -47,12 +43,14 @@ func loadBedFile() (map[string]*set.Set, error) {
 	}
 	defer f.Close()
 
-	bar := pb.New64(stats.Size())
-	r := bar.NewProxyReader(f)
+	bar := progressbar.DefaultBytes(
+		stats.Size(),
+		"loading",
+	)
 
-	reader := bufio.NewReader(r)
+	reader := bufio.NewReader(f)
 	if strings.HasSuffix(conf.BedFile, ".gz") {
-		gr, err := gzip.NewReader(r)
+		gr, err := gzip.NewReader(f)
 		if err != nil {
 			return targetPosition, errors.Wrapf(err, "failed to open %s", conf.BedFile)
 		}
@@ -68,6 +66,8 @@ func loadBedFile() (map[string]*set.Set, error) {
 				return targetPosition, errors.Wrapf(err, "failed to read from %s", conf.BedFile)
 			}
 		}
+
+		bar.Add(len([]byte(line)))
 
 		fields := strings.Split(strings.TrimSpace(line), "\t")
 
@@ -167,42 +167,74 @@ func createOmopolymericPositions() error {
 		return err
 	}
 
-	for _, chromosome := range chromosomes {
-		// fasta.Reader requires a known type template to fill
-		// with FASTA data. Here we use *linear.Seq.
-		template := linear.NewSeq(chromosome, nil, alphabet.DNAredundant)
-		r := fasta.NewReader(f, template)
+	chromChan := make(chan string)
+	outputChan := make(chan []*Omopolymeric)
 
-		// Make a seqio.Scanner to simplify iterating over a
-		// stream of data.
-		sc := seqio.NewScanner(r)
+	var wg sync.WaitGroup
+	var lock sync.Mutex
 
-		// Iterate through each sequence in a multifasta and examine the
-		// ID, description and sequence data.
-		for sc.Next() {
-			// Get the current sequence and type assert to *linear.Seq.
-			// While this is unnecessary here, it can be useful to have
-			// the concrete type.
-			s := sc.Seq().(*linear.Seq)
-
-			equals := 0
-			var last alphabet.Letter
-			for i, b := range s.Seq {
-				if b == last {
-					equals += 1
-				} else {
-					if equals >= conf.OmopolymericSpan {
-						positions = append(positions, &Omopolymeric{
-							Chromosome: chromosome, NegEquals: i - equals,
-							I: i, Equals: equals, Last: last,
-						})
-					}
-					equals = 1
+	for i := 0; i < maxInt(conf.Process, 1); i++ {
+		wg.Add(1)
+		go func(outputChan chan []*Omopolymeric, chromChan chan string, wg *sync.WaitGroup, lock *sync.Mutex) {
+			for {
+				chromosome, ok := <-chromChan
+				if !ok {
+					break
 				}
-				last = b
+				sugar.Debugf("Loading fasta of %s", chromosome)
+				tempPositions := make([]*Omopolymeric, 0, 0)
+				// fasta.Reader requires a known type template to fill
+				// with FASTA data. Here we use *linear.Seq.
+				template := linear.NewSeq(chromosome, nil, alphabet.DNAredundant)
+				r := fasta.NewReader(f, template)
+
+				// Make a seqio.Scanner to simplify iterating over a
+				// stream of data.
+				sc := seqio.NewScanner(r)
+
+				// Iterate through each sequence in a multifasta and examine the
+				// ID, description and sequence data.
+				for sc.Next() {
+					// Get the current sequence and type assert to *linear.Seq.
+					// While this is unnecessary here, it can be useful to have
+					// the concrete type.
+					s := sc.Seq().(*linear.Seq)
+
+					equals := 0
+					var last alphabet.Letter
+					for i, b := range s.Seq {
+						if b == last {
+							equals += 1
+						} else {
+							if equals >= conf.OmopolymericSpan {
+
+								tempPositions = append(tempPositions, &Omopolymeric{
+									Chromosome: chromosome, NegEquals: i - equals,
+									I: i, Equals: equals, Last: last,
+								})
+
+							}
+							equals = 1
+						}
+						last = b
+					}
+				}
+
+				lock.Lock()
+				positions = append(positions, tempPositions...)
+				lock.Unlock()
 			}
-		}
+
+			defer wg.Done()
+		}(outputChan, chromChan, &wg, &lock)
 	}
+
+	for _, chromosome := range chromosomes {
+		chromChan <- chromosome
+	}
+
+	close(chromChan)
+	wg.Wait()
 
 	sugar.Infof("%d total omopolymeric positions found.", len(positions))
 
@@ -215,16 +247,24 @@ func createOmopolymericPositions() error {
 	defer f.Close()
 
 	writer := bufio.NewWriter(f)
+	defer writer.Flush()
 
 	if _, err := writer.WriteString("#" + strings.Join([]string{"Chromomosome", "Start", "End", "Length", "Symbol"}, "\t") + "\n"); err != nil {
 		return err
 	}
 
+	bar := progressbar.Default(int64(len(positions)), "writing")
+
 	for _, position := range positions {
-		if _, err := writer.WriteString(position.String() + "\n"); err != nil {
-			return err
+		data := position.String() + "\n"
+		bar.Add(1)
+		if _, err := writer.WriteString(data); err != nil {
+			sugar.Fatal(err)
+		} else {
+
 		}
 	}
+	bar.Finish()
 	return nil
 }
 
@@ -237,11 +277,21 @@ func loadOmopolymericPositions() (map[string]*set.Set, error) {
 
 	sugar.Infof("Loading omopolymeric positions from file %s", conf.OmopolymericFile)
 
+	stats, err := os.Stat(conf.OmopolymericFile)
+	if os.IsNotExist(err) {
+		return positions, errors.New(conf.OmopolymericFile + " not exists")
+	}
+
 	f, err := os.Open(conf.OmopolymericFile)
 	if err != nil {
 		return positions, errors.Wrapf(err, "failed to open %s", conf.OmopolymericFile)
 	}
 	defer f.Close()
+
+	bar := progressbar.DefaultBytes(
+		stats.Size(),
+		"loading",
+	)
 
 	r := bufio.NewReader(f)
 
@@ -259,6 +309,7 @@ func loadOmopolymericPositions() (map[string]*set.Set, error) {
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
+		bar.Add(len([]byte(line)))
 
 		fields := strings.Split(strings.TrimSpace(line), "\t")
 		if region.Chrom == "" || fields[0] == region.Chrom {
@@ -295,7 +346,9 @@ func loadOmopolymericPositions() (map[string]*set.Set, error) {
 		}
 	}
 
-	sugar.Infof("[%v] %d total omopolymeric positions found.", region, total)
+	bar.Finish()
+
+	sugar.Infof("%d total omopolymeric positions found.", total)
 	return positions, nil
 }
 
@@ -318,12 +371,14 @@ func loadSplicingPositions() (map[string]*set.Set, error) {
 	}
 	defer f.Close()
 
-	bar := pb.New64(stats.Size())
-	r := bar.NewProxyReader(f)
+	bar := progressbar.DefaultBytes(
+		stats.Size(),
+		"loading",
+	)
 
-	reader := bufio.NewReader(r)
+	reader := bufio.NewReader(f)
 	if strings.HasSuffix(conf.SplicingFile, ".gz") {
-		gr, err := gzip.NewReader(r)
+		gr, err := gzip.NewReader(f)
 		if err != nil {
 			return res, errors.Wrapf(err, "failed to open %s", conf.SplicingFile)
 		}
@@ -341,7 +396,7 @@ func loadSplicingPositions() (map[string]*set.Set, error) {
 				return res, err
 			}
 		}
-
+		bar.Add(len([]byte(line)))
 		lines := regexp.MustCompile("\\s+").Split(strings.TrimSpace(line), -1)
 		chrom := lines[0]
 
@@ -371,6 +426,8 @@ func loadSplicingPositions() (map[string]*set.Set, error) {
 		}
 		res[chrom] = temp
 	}
+
+	bar.Finish()
 
 	return res, nil
 }
@@ -458,8 +515,8 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 	return res, nil
 }
 
-func fetchBamRefs() ([]string, error) {
-	res := make([]string, 0, 0)
+func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
+	res := make(map[string][]*ChanChunk)
 	ifh, err := os.Open(conf.File)
 	//Panic if something went wrong:
 	if err != nil {
@@ -512,6 +569,27 @@ func fetchBamRefs() ([]string, error) {
 	return res, nil
 }
 
+func fetchBamRefs() ([]string, error) {
+	res := make([]string, 0, 0)
+	ifh, err := os.Open(conf.File)
+	//Panic if something went wrong:
+	if err != nil {
+		return res, err
+	}
+
+	//Create a new BAM reader with maximum
+	//concurrency:
+	bamReader, err := bam.NewReader(ifh, 0)
+	if err != nil {
+		return res, err
+	}
+
+	for _, ref := range bamReader.Header().Refs() {
+		res = append(res, ref.Name())
+	}
+	return res, nil
+}
+
 func fetchFasta(region *Region) ([]byte, error) {
 	ifh, err := os.Open(conf.Reference)
 	if err != nil {
@@ -548,6 +626,54 @@ func fetchFasta(region *Region) ([]byte, error) {
 	res := make([]byte, seq.Length, seq.Length)
 	_, err = seq.Read(res)
 	return res, err
+}
+
+func fetchBamFast(region bgzf.Chunk) (*bam.Iterator, error) {
+	ifh, err := os.Open(conf.File)
+	//Panic if something went wrong:
+	if err != nil {
+		return nil, err
+	}
+
+	idxF, err := os.Open(conf.File + ".bai")
+	if err != nil {
+		return nil, err
+	}
+	defer idxF.Close()
+
+	idx, err := bam.ReadIndex(idxF)
+	if err != nil {
+		return nil, err
+	}
+
+	//Create a new BAM reader with maximum
+	//concurrency:
+	bamReader, err := bam.NewReader(ifh, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	chunks := make([]bgzf.Chunk, 0, 0)
+
+	for _, ref := range bamReader.Header().Refs() {
+		if region.Chrom != "" && ref.Name() == region.Chrom {
+			if region.Start == 0 && region.End == 0 {
+				if stats, ok := idx.ReferenceStats(ref.ID()); ok {
+					chunks = append(chunks, stats.Chunk)
+				}
+			} else if region.Chrom != "" && region.Start > 0 && region.End > 0 {
+				if tempChunks, err := idx.Chunks(ref, region.Start, region.End); err != nil {
+					chunks = append(chunks, tempChunks...)
+				}
+			}
+		} else if region.Chrom == "" {
+			if stats, ok := idx.ReferenceStats(ref.ID()); ok {
+				chunks = append(chunks, stats.Chunk)
+			}
+		}
+	}
+
+	return bam.NewIterator(bamReader, chunks)
 }
 
 func fetchBam(region *Region) (*bam.Iterator, error) {

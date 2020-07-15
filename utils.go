@@ -21,7 +21,6 @@ func withinInterval(i int) bool {
 	return region.Start <= i && i <= region.End
 }
 
-
 func prop(tot, va int) float64 {
 	if tot == 0 {
 		return 0.0
@@ -119,7 +118,7 @@ func getColumn(edits map[int]*EditsInfo, positions []map[string]*set.Set, target
 		if !ok {
 			continue
 		}
-		
+
 		if edit.Ref == byte('N') {
 			continue
 		}
