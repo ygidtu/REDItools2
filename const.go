@@ -20,7 +20,7 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.0.3-beta"
+	VERSION            = "0.0.4-beta"
 	DefaultBaseQuality = 30
 )
 
