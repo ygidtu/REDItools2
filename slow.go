@@ -73,7 +73,10 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 						start++
 					}
 					index += i.Len()
-				} else if i.Type() != sam.CigarDeletion || i.Type() != sam.CigarHardClipped || i.Type() != sam.CigarInsertion {
+				} else if i.Type() != sam.CigarDeletion &&
+					i.Type() != sam.CigarHardClipped &&
+					i.Type() != sam.CigarInsertion &&
+					i.Type() != sam.CigarSoftClipped {
 					start += i.Len()
 				}
 			}

@@ -56,8 +56,10 @@ func workerFast(
 			}
 
 			start, index := 0, 0
+
 			for _, i := range record.Cigar {
 				if i.Type() == sam.CigarMatch {
+
 					for j := 1; j <= i.Len(); j++ {
 						at := index + j - 1
 
@@ -69,6 +71,11 @@ func workerFast(
 						genomic := start + record.Start
 
 						if _, ok := edits[genomic]; !ok {
+							// GL000220.1
+							if genomic - 1 >= len(chrRef) {
+								sugar.Error(record.Record)
+								sugar.Fatalf("%s: genomic - 1[%d] >= len(chrRef)[%d]", ref.Ref, genomic - 1, len(chrRef))
+							}
 							edits[genomic] = NewEditsInfo(ref.Ref, chrRef[genomic-1], genomic)
 						}
 
@@ -76,7 +83,11 @@ func workerFast(
 						start++
 					}
 					index += i.Len()
-				} else if i.Type() != sam.CigarDeletion || i.Type() != sam.CigarHardClipped || i.Type() != sam.CigarInsertion {
+				} else if i.Type() != sam.CigarDeletion &&
+					i.Type() != sam.CigarHardClipped &&
+					i.Type() != sam.CigarInsertion &&
+					i.Type() != sam.CigarSoftClipped {
+
 					start += i.Len()
 				}
 			}
