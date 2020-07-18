@@ -61,12 +61,10 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 							sugar.Fatal(record.SeqString())
 						}
 
-						// record.QueryPosition = append(record.QueryPosition, at)
-
 						genomic := start + record.Start
 
 						if _, ok := edits[genomic]; !ok {
-							edits[genomic] = NewEditsInfo(ref.Chrom, chrRef[genomic-1], genomic)
+							edits[genomic] = NewEditsInfo(ref.Chrom, chrRef[genomic], genomic + 1)
 						}
 
 						edits[genomic].AddReads(record, at)

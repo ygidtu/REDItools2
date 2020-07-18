@@ -19,15 +19,6 @@ func workerFast(
 			break
 		}
 
-		//chrRef, err := fetchFasta(ref.ToRegion())
-		//if err != nil {
-		//	sugar.Warnf("try to modify %s", ref)
-		//	chrRef, err = fetchFasta(ref.SwitchRegion())
-		//}
-		//if err != nil {
-		//	sugar.Fatal(err)
-		//}
-
 		chrRef, ok := chrRefs[ref.Ref]
 		if !ok {
 			sugar.Errorf("failed to get %s from reference", ref.Ref)
@@ -72,11 +63,11 @@ func workerFast(
 
 						if _, ok := edits[genomic]; !ok {
 							// GL000220.1
-							if genomic - 1 >= len(chrRef) {
+							if genomic >= len(chrRef) {
 								sugar.Error(record.Record)
-								sugar.Fatalf("%s: genomic - 1[%d] >= len(chrRef)[%d]", ref.Ref, genomic - 1, len(chrRef))
+								sugar.Fatalf("%s: genomic - 1[%d] >= len(chrRef)[%d]", ref.Ref, genomic, len(chrRef))
 							}
-							edits[genomic] = NewEditsInfo(ref.Ref, chrRef[genomic-1], genomic)
+							edits[genomic] = NewEditsInfo(ref.Ref, chrRef[genomic], genomic + 1)
 						}
 
 						edits[genomic].AddReads(record, at)

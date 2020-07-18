@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -20,7 +21,7 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.0.4-beta"
+	VERSION            = "0.0.5-beta"
 	DefaultBaseQuality = 30
 )
 
@@ -298,7 +299,7 @@ type EditsInfo struct {
 
 func NewEditsInfo(lastChr string, ref byte, pos int) *EditsInfo {
 	return &EditsInfo{
-		LastChr: lastChr, Ref: ref, Edits: []byte{}, Pos: pos,
+		LastChr: lastChr, Ref: bytes.ToUpper([]byte{ref})[0], Edits: []byte{}, Pos: pos,
 		Counter:  map[byte]int{'A': 0, 'T': 0, 'C': 0, 'G': 0},
 		Variants: map[byte]int{'A': 0, 'T': 0, 'C': 0, 'G': 0},
 		Strand:   "", Qualities: []byte{}, Total: 0,
@@ -311,7 +312,7 @@ func (e *EditsInfo) AddReads(record *Record, at int) {
 	if seq != 'N' {
 		e.Counter[e.Ref]++
 		e.Qualities = append(e.Qualities, record.QualityAt(at)) //
-		e.Edits = append(e.Edits, seq)
+		e.Edits = append(e.Edits, bytes.ToUpper([]byte{seq})[0])
 		e.Strand += record.Strand()
 
 		if e.Ref != seq {
