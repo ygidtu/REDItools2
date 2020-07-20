@@ -3,6 +3,13 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"io"
+	"math"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+
 	"github.com/biogo/biogo/alphabet"
 	"github.com/biogo/biogo/io/seqio"
 	"github.com/biogo/biogo/io/seqio/fasta"
@@ -368,6 +375,89 @@ func loadSplicingPositions() (map[string]*set.Set, error) {
 	return res, nil
 }
 
+// splitRegion is used to spit a number of size into chunks
+func splitRegion(end, chunks int) []int {
+	regions := []int{0}
+
+	bk := end / maxInt(chunks, 1)
+
+	for i := 0; i < chunks; i++ {
+		if i == chunks-1 {
+			regions = append(regions, end)
+		} else {
+			regions = append(regions, (i+1)*bk)
+		}
+	}
+	return regions
+}
+
+// adjustRegion is used to move the end site a little backwards
+func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *bam.Reader) ([]*ChanChunk, error) {
+
+	res := make([]*ChanChunk, 0, 0)
+	for i := 0; i < len(regions); i++ {
+		if i > 0 && i < len(regions)-1 {
+			chunks, err := idx.Chunks(ref, regions[i], regions[i+1])
+			if err != nil {
+				sugar.Debugf("%v", regions)
+				// return res, errors.Wrapf(err, "failed before adjust %s: %d - %d", ref.Name(), region[i], region[i+1])
+				continue
+			}
+
+			if len(chunks) == 0 {
+				continue
+			}
+
+			iter, err := bam.NewIterator(bamReader, chunks)
+			if err != nil {
+				return res, err
+			}
+
+			lastEnd := 0
+			for iter.Next() {
+				record := iter.Record()
+
+				if lastEnd == 0 {
+					lastEnd = record.End()
+				} else if record.Start() > lastEnd {
+					break
+				}
+			}
+
+			if lastEnd > 0 {
+				regions[i] = lastEnd
+			}
+		}
+	}
+
+	for i := 1; i < len(regions); i++ {
+		// avoid duplicated regions
+		if regions[i-1] > regions[i] {
+			regions[i] = regions[i-1]
+			continue
+		}
+
+		chunks, err := idx.Chunks(ref, regions[i-1], regions[i])
+		if err != nil {
+			continue
+			// return res, errors.Wrapf(err, "failed after adjust %s: %d - %d", ref.Name(), region[i-1], region[i])
+		}
+		//res = append(res, chunks...)
+
+		for _, c := range chunks {
+			res = append(res, &ChanChunk{
+				Ref:    ref.Name(),
+				Start:  regions[i-1],
+				End:    regions[i],
+				Chunks: c,
+			})
+		}
+
+	}
+
+	return res, nil
+}
+
 func fetchBamRefs() ([]string, error) {
 	res := make([]string, 0, 0)
 	ifh, err := os.Open(conf.File)
@@ -384,7 +474,40 @@ func fetchBamRefs() ([]string, error) {
 	}
 
 	for _, ref := range bamReader.Header().Refs() {
-		res = append(res, ref.Name())
+		length, err := strconv.Atoi(ref.Get(sam.NewTag("LN")))
+		if err != nil {
+			return res, err
+		}
+
+		regions := make([]int, 0, 0)
+		if region.Empty() {
+			regions = splitRegion(length, maxInt(conf.Process, 1))
+		} else if ref.Name() == region.Chrom {
+			if region.End != 0 {
+				length = region.End
+			}
+
+			for _, i := range splitRegion(length-region.Start, maxInt(conf.Process, 1)) {
+				regions = append(regions, region.Start+i)
+			}
+		}
+
+		//sugar.Infof("%s - %d", ref.Name(), len(regions))
+
+		if len(regions) == 0 {
+			continue
+		}
+		sugar.Debugf("make chunks of %s", ref.Name())
+		temp, err := adjustRegion(regions, idx, ref, bamReader)
+		if err != nil {
+			return res, err
+		}
+
+		if len(temp) == 0 {
+			continue
+		}
+
+		res[ref.Name()] = temp
 	}
 	return res, nil
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/biogo/biogo/alphabet"
+	"github.com/biogo/hts/bgzf"
 	"github.com/biogo/hts/sam"
 	"github.com/voxelbrain/goptions"
 	"go.uber.org/zap"
@@ -19,14 +20,14 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.0.2-low memory"
+	VERSION            = "0.0.2-beta"
 	DefaultBaseQuality = 30
 )
 
 type config struct {
 	Config                 string  `goptions:"-c, --config, description='Config file'"`
 	Version                bool    `goptions:"-v, --version, description='Show version'"`
-	Debug                  bool    `goptions:"--debug, description='Show debug info'"`
+	Debug                  bool    `goptions:"--debug, description='Show debug info'" long:"debug" description:"Config file"`
 	File                   string  `goptions:"-f, --file, description='The bam file to be analyzed'"`
 	Output                 string  `goptions:"-o, --output-file, description='The output statistics file'"`
 	Process                int     `goptions:"-p, --process, description='How many process to use'"`
@@ -121,6 +122,37 @@ func decodeRegion(region string) *Region {
 	}
 
 	return res
+}
+
+type ChanChunk struct {
+	Ref    string
+	Start  int
+	End    int
+	Chunks bgzf.Chunk
+}
+
+func (c *ChanChunk) ToRegion() *Region {
+	return &Region{
+		Chrom: c.Ref,
+		Start: c.Start,
+		End:   c.End,
+	}
+}
+
+func (c *ChanChunk) SwitchRegion() *Region {
+	ref := c.Ref
+
+	if strings.HasPrefix(ref, "chr") {
+		ref = strings.ReplaceAll(ref, "chr", "")
+	} else {
+		ref = "chr" + ref
+	}
+
+	return &Region{
+		Chrom: ref,
+		Start: c.Start,
+		End:   c.End,
+	}
 }
 
 type Omopolymeric struct {

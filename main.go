@@ -24,6 +24,7 @@ func writer(w chan string, wg *sync.WaitGroup) {
 	f, err := os.OpenFile(conf.Output, mode, 0644)
 	if err != nil {
 		sugar.Fatalf("failed to open %s: %s", conf.Output, err.Error())
+		os.Exit(1)
 	}
 	defer f.Close()
 
@@ -81,17 +82,19 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 			break
 		}
 
-		chrRef, err := fetchFasta(ref)
-		if err != nil {
-			sugar.Warnf("try to modify %s", ref.Chrom)
-			if strings.HasPrefix(ref.Chrom, "chr") {
-				chrRef, err = fetchFasta(&Region{Chrom: strings.ReplaceAll(ref.Chrom, "chr", "")})
-			} else {
-				chrRef, err = fetchFasta(&Region{Chrom: "chr" + ref.Chrom})
-			}
-		}
-		if err != nil {
-			sugar.Fatal(err)
+		//chrRef, err := fetchFasta(ref.ToRegion())
+		//if err != nil {
+		//	sugar.Warnf("try to modify %s", ref)
+		//	chrRef, err = fetchFasta(ref.SwitchRegion())
+		//}
+		//if err != nil {
+		//	sugar.Fatal(err)
+		//}
+
+		chrRef, ok := chrRefs[ref.Ref]
+		if !ok {
+			sugar.Errorf("failed to get %s from reference", ref.Ref)
+			continue
 		}
 
 		iter, err := fetchBam(ref)
@@ -125,8 +128,6 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 							sugar.Errorf("%s - %d - %d - %d", record.Cigar, index, at, record.Seq.Length)
 							sugar.Fatal(record.SeqString())
 						}
-
-						// record.QueryPosition = append(record.QueryPosition, at)
 
 						genomic := start + record.Start
 
@@ -164,6 +165,8 @@ func main() {
 	goptions.ParseAndFail(&conf)
 
 	setLogger(conf.Debug, conf.Log)
+
+	sugar.Debugf("options: %v", conf)
 
 	if conf.Version {
 		sugar.Infof("current version: %v", VERSION)
@@ -212,6 +215,39 @@ func main() {
 
 	var wg sync.WaitGroup
 	w := make(chan string)
+	refs := make(chan *ChanChunk)
+
+	references, err := fetchBamRefs()
+	if err != nil {
+		sugar.Fatal(err)
+	}
+
+	sugar.Infof("load reference from %s", conf.Reference)
+	chrRefs := make(map[string][]byte)
+	for ref, _ := range references {
+		wg.Add(1)
+		go func(ref string, wg *sync.WaitGroup, lock *sync.Mutex) {
+			defer wg.Done()
+			temp, err := fetchFasta(&Region{Chrom: ref})
+			if err != nil {
+				sugar.Warnf("try to modify %s", ref)
+				if strings.HasPrefix(ref, "chr") {
+					temp, err = fetchFasta(&Region{Chrom: strings.ReplaceAll(ref, "chr", "")})
+				} else {
+					temp, err = fetchFasta(&Region{Chrom: "chr" + ref})
+				}
+			}
+			if err != nil {
+				sugar.Fatal(err)
+			}
+			lock.Lock()
+			chrRefs[ref] = temp
+			lock.Unlock()
+		}(ref, &wg, &lock)
+	}
+
+	wg.Wait()
+
 	wg.Add(1)
 	go writer(w, &wg)
 	refs := make(chan *Region)
@@ -221,14 +257,12 @@ func main() {
 		wg.Add(1)
 	}
 
-	if region.Empty() {
-		if references, err := fetchBamRefs(); err == nil {
-			for _, r := range references {
-				refs <- &Region{Chrom: r}
-			}
+	for ref, chunks := range references {
+		sugar.Infof("read reads from %s", ref)
+		for _, c := range chunks {
+			sugar.Debug(c)
+			refs <- c
 		}
-	} else {
-		refs <- region
 	}
 
 	close(refs)
