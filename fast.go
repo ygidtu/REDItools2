@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/biogo/hts/sam"
-	"github.com/golang-collections/collections/set"
 	"strings"
 	"sync"
+
+	"github.com/biogo/hts/sam"
+	"github.com/golang-collections/collections/set"
 )
 
 func workerFast(
@@ -67,7 +68,7 @@ func workerFast(
 								sugar.Error(record.Record)
 								sugar.Fatalf("%s: genomic - 1[%d] >= len(chrRef)[%d]", ref.Ref, genomic, len(chrRef))
 							}
-							edits[genomic] = NewEditsInfo(ref.Ref, chrRef[genomic], genomic + 1)
+							edits[genomic] = NewEditsInfo(ref.Ref, chrRef[genomic], genomic+1)
 						}
 
 						edits[genomic].AddReads(record, at)
@@ -110,28 +111,45 @@ func fastMode(
 
 	sugar.Infof("load reference from %s", conf.Reference)
 	chrRefs := make(map[string][]byte)
-	for ref, _ := range references {
+	refChan := make(chan string)
+
+	for i := 0; i < conf.Process; i++ {
 		wg.Add(1)
-		go func(ref string, wg *sync.WaitGroup, lock *sync.Mutex) {
+
+		go func(refChan chan string, wg *sync.WaitGroup, lock *sync.Mutex) {
 			defer wg.Done()
-			temp, err := fetchFasta(&Region{Chrom: ref})
-			if err != nil {
-				sugar.Warnf("try to modify %s", ref)
-				if strings.HasPrefix(ref, "chr") {
-					temp, err = fetchFasta(&Region{Chrom: strings.ReplaceAll(ref, "chr", "")})
-				} else {
-					temp, err = fetchFasta(&Region{Chrom: "chr" + ref})
+
+			for {
+				ref, ok := <-refChan
+
+				if !ok {
+					break
 				}
+
+				temp, err := fetchFasta(&Region{Chrom: ref})
+				if err != nil {
+					sugar.Warnf("try to modify %s", ref)
+					if strings.HasPrefix(ref, "chr") {
+						temp, err = fetchFasta(&Region{Chrom: strings.ReplaceAll(ref, "chr", "")})
+					} else {
+						temp, err = fetchFasta(&Region{Chrom: "chr" + ref})
+					}
+				}
+				if err != nil {
+					sugar.Fatal(err)
+				}
+				lock.Lock()
+				chrRefs[ref] = temp
+				lock.Unlock()
 			}
-			if err != nil {
-				sugar.Fatal(err)
-			}
-			lock.Lock()
-			chrRefs[ref] = temp
-			lock.Unlock()
-		}(ref, wg, &lock)
+
+		}(refChan, wg, &lock)
 	}
 
+	for ref := range references {
+		refChan <- ref
+	}
+	close(refChan)
 	wg.Wait()
 
 	wg.Add(1)

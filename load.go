@@ -134,6 +134,7 @@ func loadChromosomesFromFai(path string) ([]string, error) {
 	if err != nil {
 		return res, errors.Wrapf(err, "failed to open %s", path)
 	}
+	defer f.Close()
 
 	if r, err := fai.ReadFrom(f); err != nil {
 		return res, err
@@ -166,6 +167,7 @@ func createOmopolymericPositions() error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
 	chromChan := make(chan string)
 	outputChan := make(chan []*Omopolymeric)
@@ -522,6 +524,18 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 	if err != nil {
 		return res, err
 	}
+	defer ifh.Close()
+
+	idxF, err := os.Open(conf.File + ".bai")
+	if err != nil {
+		return nil, err
+	}
+	defer idxF.Close()
+
+	idx, err := bam.ReadIndex(idxF)
+	if err != nil {
+		return nil, err
+	}
 
 	//Create a new BAM reader with maximum
 	//concurrency:
@@ -576,6 +590,7 @@ func fetchBamRefs() ([]string, error) {
 	if err != nil {
 		return res, err
 	}
+	defer ifh.Close()
 
 	//Create a new BAM reader with maximum
 	//concurrency:
@@ -634,17 +649,7 @@ func fetchBamFast(region bgzf.Chunk) (*bam.Iterator, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	idxF, err := os.Open(conf.File + ".bai")
-	if err != nil {
-		return nil, err
-	}
-	defer idxF.Close()
-
-	idx, err := bam.ReadIndex(idxF)
-	if err != nil {
-		return nil, err
-	}
+	defer ifh.Close()
 
 	//Create a new BAM reader with maximum
 	//concurrency:
@@ -653,27 +658,7 @@ func fetchBamFast(region bgzf.Chunk) (*bam.Iterator, error) {
 		return nil, err
 	}
 
-	chunks := make([]bgzf.Chunk, 0, 0)
-
-	for _, ref := range bamReader.Header().Refs() {
-		if region.Chrom != "" && ref.Name() == region.Chrom {
-			if region.Start == 0 && region.End == 0 {
-				if stats, ok := idx.ReferenceStats(ref.ID()); ok {
-					chunks = append(chunks, stats.Chunk)
-				}
-			} else if region.Chrom != "" && region.Start > 0 && region.End > 0 {
-				if tempChunks, err := idx.Chunks(ref, region.Start, region.End); err != nil {
-					chunks = append(chunks, tempChunks...)
-				}
-			}
-		} else if region.Chrom == "" {
-			if stats, ok := idx.ReferenceStats(ref.ID()); ok {
-				chunks = append(chunks, stats.Chunk)
-			}
-		}
-	}
-
-	return bam.NewIterator(bamReader, chunks)
+	return bam.NewIterator(bamReader, []bgzf.Chunk{region})
 }
 
 func fetchBam(region *Region) (*bam.Iterator, error) {
@@ -683,6 +668,7 @@ func fetchBam(region *Region) (*bam.Iterator, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer ifh.Close()
 
 	idxF, err := os.Open(conf.File + ".bai")
 	if err != nil {

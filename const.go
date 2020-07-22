@@ -21,7 +21,7 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.0.5-beta"
+	VERSION            = "0.0.6-beta"
 	DefaultBaseQuality = 30
 )
 
@@ -48,7 +48,7 @@ type config struct {
 	MinBaseQuality         int     `goptions:"--min-base-quality, description='The minimum base quality. Bases whose quality is below this value will not be included in the analysis.'"`
 	MinBasePosition        int     `goptions:"--min-base-position, description='The minimum base position. Bases which reside in a previous position (in the read) will not be included in the analysis.'"`
 	MaxBasePosition        int     `goptions:"--max-base-position, description='The maximum base position. Bases which reside in a further position (in the read) will not be included in the analysis.'"`
-	MinColumnLength        int     `goptions:"--min-column-length, description='The minimum length of editing column (per position). Positions whose columns have length below this value will not be included in the analysis.'"`
+	MinColumnLength        int     `goptions:"-l, --min-column-length, description='The minimum length of editing column (per position). Positions whose columns have length below this value will not be included in the analysis.'"`
 	MinEditsPerNucleotide  int     `goptions:"--min-edits-per-nucleotide, description='The minimum number of editing for events each nucleotide (per position). Positions whose columns have bases with less than min-edits-per-base edits will not be included in the analysis.'"`
 	MinEdits               int     `goptions:"--min-edits, description='The minimum number of editing events (per position). Positions whose columns have bases with less than \'min-edits-per-base edits\' will not be included in the analysis.'"`
 	MaxEditsPerNucleotide  int     `goptions:"--max-editing-nucleotides, description='The maximum number of editing nucleotides, from 0 to 4 (per position). Positions whose columns have more than \'max-editing-nucleotides\' will not be included in the analysis.'"`
