@@ -11,6 +11,7 @@ import (
 )
 
 func writer(w chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	sugar.Infof("write into %s", conf.Output)
 	mode := os.O_CREATE | os.O_WRONLY
 	if conf.Append {
@@ -26,16 +27,17 @@ func writer(w chan string, wg *sync.WaitGroup) {
 	}
 	defer f.Close()
 
-	var gwriter *gzip.Writer
-	writer := bufio.NewWriter(f)
-	defer writer.Flush()
-
+	var writer *bufio.Writer
 	if strings.HasSuffix(conf.Output, "gz") {
-		gwriter = gzip.NewWriter(f)
+		gwriter := gzip.NewWriter(f)
 		defer gwriter.Flush()
 		defer gwriter.Close()
 		writer = bufio.NewWriter(gwriter)
+	} else {
+		writer = bufio.NewWriter(f)
 	}
+	defer writer.Flush()
+
 	if !conf.RemoveHeader {
 
 		_, err = writer.WriteString(strings.Join(getHeader(), "\t") + "\n")
@@ -67,8 +69,6 @@ func writer(w chan string, wg *sync.WaitGroup) {
 
 		_, _ = writer.WriteString(line + "\n")
 	}
-
-	wg.Done()
 }
 
 func main() {
