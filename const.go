@@ -21,7 +21,7 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.0.7-beta"
+	VERSION            = "0.0.9-beta"
 	DefaultBaseQuality = 30
 )
 
@@ -197,6 +197,7 @@ type Record struct {
 }
 
 func NewRecord(record *sam.Record) *Record {
+
 	rec := &Record{
 		Name: record.Name,
 		MapQ: record.MapQ, Cigar: record.Cigar,
@@ -205,28 +206,15 @@ func NewRecord(record *sam.Record) *Record {
 		Start: record.Start(), End: record.End(),
 	}
 
-	rec.QueryAlignmentIndex = rec.QueryAlignmentStart() - 1
-
 	return rec
 }
 
+// String as name says
 func (r *Record) String() string {
 	return fmt.Sprintf("%s:%d-%d:%s %s %s", r.Chrom, r.Start, r.End, r.Strand(), r.Ref, r.Alt)
 }
 
-// QueryAlignmentStart is start index of aligned
-func (r *Record) QueryAlignmentStart() int {
-	start := 0
-	for _, i := range r.Cigar {
-		if i.Type() == sam.CigarSoftClipped {
-			start += i.Len()
-		} else {
-			break
-		}
-	}
-	return start
-}
-
+// SeqString is function that convert sequence from []byte to string
 func (r *Record) SeqString() string {
 	return string(r.Seq.Expand())
 }
@@ -307,10 +295,29 @@ func NewEditsInfo(lastChr string, ref byte, pos int) *EditsInfo {
 }
 
 func (e *EditsInfo) AddReads(record *Record, at int) {
+
+	if at < conf.MinBasePosition || (conf.MaxBasePosition > 0 && at > conf.MaxBasePosition) {
+		//sugar.Debugf("failed at base position: %v, min: %v; max: %v", at, conf.MinBasePosition, conf.MaxBasePosition)
+		return
+	}
+
+	if at >= record.Seq.Length {
+		sugar.Fatalf("%s - %d", record.SeqString(), at)
+	}
+
+	if record.QualityAt(at) < byte(conf.MinBaseQuality) {
+		//sugar.Debugf("failed at base position: %v, min: %v;", record.QualityAt(at), conf.MinBaseQuality)
+		return
+	}
+
 	seq := record.SeqAt(at)
 
+	if _, ok := e.Counter[seq]; !ok {
+		e.Counter[seq] = 0
+	}
+
 	if seq != 'N' {
-		e.Counter[e.Ref]++
+		e.Counter[seq]++
 		e.Qualities = append(e.Qualities, record.QualityAt(at)) //
 		e.Edits = append(e.Edits, bytes.ToUpper([]byte{seq})[0])
 		e.Strand += record.Strand()
@@ -319,6 +326,7 @@ func (e *EditsInfo) AddReads(record *Record, at int) {
 			e.Variants[seq]++
 		}
 	}
+
 	e.Total++
 }
 
@@ -338,6 +346,26 @@ func (e *EditsInfo) Valid() bool {
 	}
 
 	if len(e.Edits) < conf.MinColumnLength || len(e.Edits) == 0 {
+		return false
+	}
+
+	if conf.MaxEditsPerNucleotide > 0 && len(e.Counter) >= conf.MaxEditsPerNucleotide {
+		return false
+	}
+
+	numOfEdits := 0
+	for _, edit := range e.Edits {
+		if edit != e.Ref {
+			if c, ok := e.Variants[edit]; ok {
+				if c > 0 && c < conf.MinEditsPerNucleotide {
+					return false
+				}
+				numOfEdits += c
+			}
+		}
+	}
+
+	if numOfEdits < conf.MinEdits {
 		return false
 	}
 

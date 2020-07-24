@@ -11,7 +11,7 @@ import (
 )
 
 func writer(w chan string, wg *sync.WaitGroup) {
-	defer wg.Done()
+
 	sugar.Infof("write into %s", conf.Output)
 	mode := os.O_CREATE | os.O_WRONLY
 	if conf.Append {
@@ -25,18 +25,17 @@ func writer(w chan string, wg *sync.WaitGroup) {
 		sugar.Fatalf("failed to open %s: %s", conf.Output, err.Error())
 		os.Exit(1)
 	}
-	defer f.Close()
+	//defer f.Close()
 
 	var writer *bufio.Writer
+	var gwriter *gzip.Writer
 	if strings.HasSuffix(conf.Output, "gz") {
-		gwriter := gzip.NewWriter(f)
-		defer gwriter.Flush()
-		defer gwriter.Close()
+		gwriter = gzip.NewWriter(f)
 		writer = bufio.NewWriter(gwriter)
 	} else {
 		writer = bufio.NewWriter(f)
 	}
-	defer writer.Flush()
+	//defer writer.Flush()
 
 	if !conf.RemoveHeader {
 
@@ -52,10 +51,7 @@ func writer(w chan string, wg *sync.WaitGroup) {
 	done := 0
 
 	for {
-		line, ok := <-w
-		if !ok {
-			break
-		}
+		line := <-w
 
 		if line == "done" {
 			done++
@@ -69,6 +65,16 @@ func writer(w chan string, wg *sync.WaitGroup) {
 
 		_, _ = writer.WriteString(line + "\n")
 	}
+
+	writer.Flush()
+
+	if gwriter != nil {
+		gwriter.Flush()
+		gwriter.Close()
+	}
+
+	f.Close()
+	wg.Done()
 }
 
 func main() {

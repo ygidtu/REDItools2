@@ -34,6 +34,12 @@ func filterReads(record *Record) bool {
 		return true
 	}
 
+	//sugar.Infof("seq length: %d, min read length: %d", record.Seq.Length, conf.MinReadLength)
+	//
+	//if record.Seq.Length < conf.MinReadLength {
+	//	return false
+	//}
+
 	if _, ok := record.Record.Tag([]byte("SA")); ok {
 		return false
 	}

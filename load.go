@@ -471,6 +471,7 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 			if err != nil {
 				return res, err
 			}
+			defer iter.Close()
 
 			lastEnd := 0
 			for iter.Next() {
@@ -480,6 +481,8 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 					lastEnd = record.End()
 				} else if record.Start() > lastEnd {
 					break
+				} else {
+					lastEnd = record.End()
 				}
 			}
 
@@ -524,18 +527,19 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 	if err != nil {
 		return res, err
 	}
-	defer ifh.Close()
+	//defer ifh.Close()
 
 	idxF, err := os.Open(conf.File + ".bai")
 	if err != nil {
 		return nil, err
 	}
-	defer idxF.Close()
+	//defer idxF.Close()
 
 	idx, err := bam.ReadIndex(idxF)
 	if err != nil {
 		return nil, err
 	}
+	idxF.Close()
 
 	//Create a new BAM reader with maximum
 	//concurrency:
@@ -543,6 +547,7 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 	if err != nil {
 		return res, err
 	}
+	//defer bamReader.Close()
 
 	for _, ref := range bamReader.Header().Refs() {
 		length, err := strconv.Atoi(ref.Get(sam.NewTag("LN")))
@@ -563,12 +568,10 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 			}
 		}
 
-		//sugar.Infof("%s - %d", ref.Name(), len(regions))
-
 		if len(regions) == 0 {
 			continue
 		}
-		sugar.Debugf("make chunks of %s", ref.Name())
+		//sugar.Debugf("make chunks of %s", ref.Name())
 		temp, err := adjustRegion(regions, idx, ref, bamReader)
 		if err != nil {
 			return res, err
@@ -580,6 +583,9 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 
 		res[ref.Name()] = temp
 	}
+
+	bamReader.Close()
+	ifh.Close()
 	return res, nil
 }
 
@@ -590,7 +596,7 @@ func fetchBamRefs() ([]string, error) {
 	if err != nil {
 		return res, err
 	}
-	defer ifh.Close()
+	//defer ifh.Close()
 
 	//Create a new BAM reader with maximum
 	//concurrency:
@@ -598,10 +604,13 @@ func fetchBamRefs() ([]string, error) {
 	if err != nil {
 		return res, err
 	}
+	//defer bamReader.Close()
 
 	for _, ref := range bamReader.Header().Refs() {
 		res = append(res, ref.Name())
 	}
+	bamReader.Close()
+	ifh.Close()
 	return res, nil
 }
 
@@ -610,19 +619,20 @@ func fetchFasta(region *Region) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer ifh.Close()
+	//defer ifh.Close()
 
 	idxF, err := os.Open(conf.Reference + ".fai")
 	if err != nil {
 		return nil, err
 	}
-	defer idxF.Close()
+	//defer idxF.Close()
 
 	idx, err := fai.ReadFrom(idxF)
 
 	if err != nil {
 		return nil, err
 	}
+	idxF.Close()
 
 	r := fai.NewFile(ifh, idx)
 
@@ -640,46 +650,30 @@ func fetchFasta(region *Region) ([]byte, error) {
 
 	res := make([]byte, seq.Length, seq.Length)
 	_, err = seq.Read(res)
+	ifh.Close()
 	return res, err
 }
 
-func fetchBamFast(region bgzf.Chunk) (*bam.Iterator, error) {
-	ifh, err := os.Open(conf.File)
-	//Panic if something went wrong:
-	if err != nil {
-		return nil, err
-	}
-	defer ifh.Close()
-
-	//Create a new BAM reader with maximum
-	//concurrency:
-	bamReader, err := bam.NewReader(ifh, 1)
-	if err != nil {
-		return nil, err
-	}
-
-	return bam.NewIterator(bamReader, []bgzf.Chunk{region})
-}
-
-func fetchBam(region *Region) (*bam.Iterator, error) {
+func fetchBam(region *Region) ([]bgzf.Chunk, error) {
 	sugar.Infof("read reads from %s", region.String())
 	ifh, err := os.Open(conf.File)
 	//Panic if something went wrong:
 	if err != nil {
 		return nil, err
 	}
-	defer ifh.Close()
+	//defer ifh.Close()
 
 	idxF, err := os.Open(conf.File + ".bai")
 	if err != nil {
 		return nil, err
 	}
-	defer idxF.Close()
+	//defer idxF.Close()
 
 	idx, err := bam.ReadIndex(idxF)
 	if err != nil {
 		return nil, err
 	}
+	idxF.Close()
 
 	//Create a new BAM reader with maximum
 	//concurrency:
@@ -687,6 +681,7 @@ func fetchBam(region *Region) (*bam.Iterator, error) {
 	if err != nil {
 		return nil, err
 	}
+	//defer bamReader.Close()
 
 	chunks := make([]bgzf.Chunk, 0, 0)
 
@@ -696,11 +691,13 @@ func fetchBam(region *Region) (*bam.Iterator, error) {
 				if stats, ok := idx.ReferenceStats(ref.ID()); ok {
 					chunks = append(chunks, stats.Chunk)
 				}
+
 			} else if region.Chrom != "" && region.Start > 0 && region.End > 0 {
 				if tempChunks, err := idx.Chunks(ref, region.Start, region.End); err != nil {
 					chunks = append(chunks, tempChunks...)
 				}
 			}
+			break
 		} else if region.Chrom == "" {
 			if stats, ok := idx.ReferenceStats(ref.ID()); ok {
 				chunks = append(chunks, stats.Chunk)
@@ -708,5 +705,9 @@ func fetchBam(region *Region) (*bam.Iterator, error) {
 		}
 	}
 
-	return bam.NewIterator(bamReader, chunks)
+	bamReader.Close()
+	idxF.Close()
+	ifh.Close()
+
+	return chunks, nil
 }

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"github.com/biogo/hts/bam"
+	"github.com/biogo/hts/bgzf"
+	"os"
 	"strings"
 	"sync"
 
-	"github.com/biogo/hts/sam"
 	"github.com/golang-collections/collections/set"
 )
 
@@ -26,10 +28,26 @@ func workerFast(
 			continue
 		}
 
-		iter, err := fetchBamFast(ref.Chunks)
+		ifh, err := os.Open(conf.File)
+		//Panic if something went wrong:
 		if err != nil {
 			sugar.Fatal(err)
 		}
+		//defer ifh.Close()
+
+		//Create a new BAM reader with maximum
+		//concurrency:
+		bamReader, err := bam.NewReader(ifh, 1)
+		if err != nil {
+			sugar.Fatal(err)
+		}
+		//defer bamReader.Close()
+
+		iter, err := bam.NewIterator(bamReader, []bgzf.Chunk{ref.Chunks})
+		if err != nil {
+			sugar.Fatal(err)
+		}
+		//defer iter.Close()
 
 		lastEnd := 0
 		total := 0
@@ -47,43 +65,7 @@ func workerFast(
 				continue
 			}
 
-			start, index := 0, 0
-
-			for _, i := range record.Cigar {
-				if i.Type() == sam.CigarMatch {
-
-					for j := 1; j <= i.Len(); j++ {
-						at := index + j - 1
-
-						if at >= record.Seq.Length {
-							sugar.Errorf("%s - %d - %d - %d", record.Cigar, index, at, record.Seq.Length)
-							sugar.Fatal(record.SeqString())
-						}
-
-						genomic := start + record.Start
-
-						if _, ok := edits[genomic]; !ok {
-							// GL000220.1
-							if genomic >= len(chrRef) {
-								sugar.Error(record.Record)
-								sugar.Fatalf("%s: genomic - 1[%d] >= len(chrRef)[%d]", ref.Ref, genomic, len(chrRef))
-							}
-							edits[genomic] = NewEditsInfo(ref.Ref, chrRef[genomic], genomic+1)
-						}
-
-						edits[genomic].AddReads(record, at)
-						start++
-					}
-					index += i.Len()
-				} else if i.Type() != sam.CigarDeletion &&
-					i.Type() != sam.CigarHardClipped &&
-					i.Type() != sam.CigarInsertion &&
-					i.Type() != sam.CigarSoftClipped {
-
-					start += i.Len()
-				}
-			}
-
+			edits = updateEdits(edits, record, chrRef, ref.Ref)
 			if record.Start > lastEnd {
 				getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
 
@@ -91,6 +73,10 @@ func workerFast(
 				lastEnd = record.End
 			}
 		}
+
+		iter.Close()
+		bamReader.Close()
+		ifh.Close()
 
 		getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
 	}
@@ -163,7 +149,7 @@ func fastMode(
 	for ref, chunks := range references {
 		sugar.Infof("read reads from %s", ref)
 		for _, c := range chunks {
-			sugar.Debug(c)
+			//sugar.Debug(c)
 			refs <- c
 		}
 	}
