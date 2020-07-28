@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/biogo/hts/sam"
 	"sort"
 	"strings"
+
+	"github.com/biogo/hts/sam"
 
 	"github.com/golang-collections/collections/set"
 )
@@ -75,15 +76,15 @@ func complementAll(sequence []byte) []byte {
 	return res
 }
 
-func normByStrand(seq_ []byte, strand_ string, sequal_ []byte) ([]byte, string, []byte) {
+func normByStrand(seqParam []byte, strandParam string, sequalParam []byte) ([]byte, string, []byte) {
 
 	seq, strand, qual := make([]byte, 0, 0), make([]string, 0, 0), make([]byte, 0, 0)
 
-	for i, j := range seq_ {
-		if strand_[i] == j {
+	for i, j := range seqParam {
+		if strandParam[i] == j {
 			seq = append(seq, j)
-			strand = append(strand, string(strand_[i]))
-			qual = append(qual, sequal_[i])
+			strand = append(strand, string(strandParam[i]))
+			qual = append(qual, sequalParam[i])
 		}
 	}
 
@@ -120,10 +121,6 @@ func getColumn(edits map[int]*EditsInfo, positions []map[string]*set.Set, target
 			continue
 		}
 
-		if edit.Ref == byte('N') {
-			continue
-		}
-
 		for _, pos := range positions {
 			if temp, ok := pos[edit.LastChr]; ok {
 				if temp.Has(edit.Pos) {
@@ -150,6 +147,11 @@ func updateEdits(edits map[int]*EditsInfo, record *Record, chrRef []byte, ref st
 	// START keep the genomic position
 	start, index := record.Start, 0
 	for _, i := range record.Cigar {
+
+		if conf.MaxBasePosition > 0 && record.QueryLength-index < conf.MaxBasePosition {
+			break
+		}
+
 		if i.Type() != sam.CigarDeletion &&
 			i.Type() != sam.CigarHardClipped &&
 			i.Type() != sam.CigarInsertion {

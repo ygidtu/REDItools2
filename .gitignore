@@ -146,3 +146,4 @@ bak/
 
 *_test.go
 test/
+*.gz

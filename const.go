@@ -21,7 +21,10 @@ var conf config
 var region *Region
 
 const (
-	VERSION            = "0.0.9-beta"
+	// VERSION is just the version number
+	VERSION = "0.1.0"
+
+	// DefaultBaseQuality as name says
 	DefaultBaseQuality = 30
 )
 
@@ -50,8 +53,8 @@ type config struct {
 	MaxBasePosition        int     `goptions:"--max-base-position, description='The maximum base position. Bases which reside in a further position (in the read) will not be included in the analysis.'"`
 	MinColumnLength        int     `goptions:"-l, --min-column-length, description='The minimum length of editing column (per position). Positions whose columns have length below this value will not be included in the analysis.'"`
 	MinEditsPerNucleotide  int     `goptions:"--min-edits-per-nucleotide, description='The minimum number of editing for events each nucleotide (per position). Positions whose columns have bases with less than min-edits-per-base edits will not be included in the analysis.'"`
-	MinEdits               int     `goptions:"--min-edits, description='The minimum number of editing events (per position). Positions whose columns have bases with less than \'min-edits-per-base edits\' will not be included in the analysis.'"`
-	MaxEditsPerNucleotide  int     `goptions:"--max-editing-nucleotides, description='The maximum number of editing nucleotides, from 0 to 4 (per position). Positions whose columns have more than \'max-editing-nucleotides\' will not be included in the analysis.'"`
+	MinEdits               int     `goptions:"--min-edits, description='The minimum number of editing events (per position). Positions whose columns have bases with less than (min-edits-per-base edits) will not be included in the analysis.'"`
+	MaxEditsPerNucleotide  int     `goptions:"--max-edits-per-nucleotides, description='The maximum number of editing nucleotides, from 0 to 4 (per position). Positions whose columns have more than (max-editing-nucleotides) will not be included in the analysis.'"`
 	StrandConfidence       int     `goptions:"-T, --strand-confidence, description='Strand inference type 1:maxValue 2:useConfidence [1]; maxValue: the most prominent strand count will be used; useConfidence: strand is assigned if over a prefixed frequency confidence (-TV option)'"`
 	StrandCorrection       bool    `goptions:"-C, --strand-corection, description='Strand correction. Once the strand has been inferred, only bases according to this strand will be selected.'"`
 	StrandConfidenceValue  float64 `goptions:"--strand-confidence-value, description='Strand confidence [0.70]'"`
@@ -70,7 +73,7 @@ func defaultConfig() config {
 		MinReadLength: 30, MinReadQuality: 20,
 		MinBaseQuality: 30, MinBasePosition: 0,
 		MaxBasePosition: 0, MinColumnLength: 1,
-		MinEditsPerNucleotide: 1, MinEdits: 0,
+		MinEditsPerNucleotide: 1, MinEdits: 1,
 		MaxEditsPerNucleotide: 100, StrandConfidenceValue: 0.7,
 		StrandConfidence: 1, Output: "reditools2_table.gz",
 	}
@@ -106,7 +109,7 @@ func decodeRegion(region string) *Region {
 		return res
 	}
 
-	regions := strings.Split(region, ":")
+	regions := regexp.MustCompile("[:-]").Split(region, -1)
 
 	if regexp.MustCompile("\\w+:\\d+-\\d+(:[+-])?").MatchString(region) {
 		res.Chrom = regions[0]
@@ -115,10 +118,6 @@ func decodeRegion(region string) *Region {
 
 		i, _ = strconv.Atoi(regions[2])
 		res.End = i
-
-		if len(regions) > 3 {
-			res.Strand = regions[len(regions)-1]
-		}
 	} else {
 		res.Chrom = region
 	}
@@ -126,13 +125,15 @@ func decodeRegion(region string) *Region {
 	return res
 }
 
+// ChanChunk is struct that transfer chunks between goroutines
 type ChanChunk struct {
 	Ref    string
 	Start  int
 	End    int
-	Chunks bgzf.Chunk
+	Chunks []bgzf.Chunk
 }
 
+// ToRegion as name says
 func (c *ChanChunk) ToRegion() *Region {
 	return &Region{
 		Chrom: c.Ref,
@@ -141,6 +142,7 @@ func (c *ChanChunk) ToRegion() *Region {
 	}
 }
 
+// SwitchRegion is add or remove chr from chromosome
 func (c *ChanChunk) SwitchRegion() *Region {
 	ref := c.Ref
 
@@ -157,6 +159,7 @@ func (c *ChanChunk) SwitchRegion() *Region {
 	}
 }
 
+// Omopolymeric is struct handle the Omopolymeric data
 type Omopolymeric struct {
 	Chromosome string
 	NegEquals  int
@@ -181,22 +184,30 @@ func getHeader() []string {
 
 // Record is a wrap of
 type Record struct {
-	Name                string
-	Chrom               string
-	Start               int
-	End                 int
-	Ref                 string
-	Alt                 string
-	QueryAlignmentIndex int
-	MapQ                byte
-	Cigar               sam.Cigar
-	Flags               sam.Flags
-	Seq                 sam.Seq
-	Qual                []byte
-	Record              *sam.Record
+	Name        string
+	Chrom       string
+	Start       int
+	End         int
+	Ref         string
+	Alt         string
+	MapQ        byte
+	Cigar       sam.Cigar
+	Flags       sam.Flags
+	Seq         sam.Seq
+	Qual        []byte
+	Record      *sam.Record
+	QueryLength int
 }
 
+// NewRecord is function that create a pointer to record
 func NewRecord(record *sam.Record) *Record {
+
+	queryLength := 0
+	for _, c := range record.Cigar {
+		if c.Type() == sam.CigarMatch {
+			queryLength += c.Len()
+		}
+	}
 
 	rec := &Record{
 		Name: record.Name,
@@ -204,6 +215,7 @@ func NewRecord(record *sam.Record) *Record {
 		Flags: record.Flags, Chrom: record.Ref.Name(),
 		Seq: record.Seq, Record: record, Qual: record.Qual,
 		Start: record.Start(), End: record.End(),
+		QueryLength: queryLength,
 	}
 
 	return rec
@@ -240,20 +252,17 @@ func (r *Record) Strand() string {
 	if r.IsRead2() {
 		if (conf.Strand == 2 && r.IsReverse()) || (conf.Strand != 2 && !r.IsReverse()) {
 			return "-"
-		} else {
-			return "+"
 		}
-	} else { // read1 and single ends
-		if (conf.Strand == 1 && r.IsReverse()) || (conf.Strand != 1 && !r.IsReverse()) {
-			return "-"
-		} else {
-			return "+"
-		}
+		return "+"
 	}
-
-	return "*"
+	// read1 and single ends
+	if (conf.Strand == 1 && r.IsReverse()) || (conf.Strand != 1 && !r.IsReverse()) {
+		return "-"
+	}
+	return "+"
 }
 
+// QualityAt is used to return the quality of specific base
 func (r *Record) QualityAt(i int) byte {
 	if i >= len(r.Qual) {
 		sugar.Fatalf("%d -  %d - %v", i, len(r.Qual), r.Qual)
@@ -269,10 +278,12 @@ func complement(sequence byte) byte {
 	return data[sequence]
 }
 
+// SeqAt is used to return base in this position
 func (r *Record) SeqAt(i int) byte {
 	return r.Seq.At(i)
 }
 
+// EditsInfo is struct that keep the information for all reads that aligned to this position
 type EditsInfo struct {
 	LastChr   string
 	Ref       byte
@@ -285,18 +296,20 @@ type EditsInfo struct {
 	Total     int
 }
 
+// NewEditsInfo as names says
 func NewEditsInfo(lastChr string, ref byte, pos int) *EditsInfo {
 	return &EditsInfo{
 		LastChr: lastChr, Ref: bytes.ToUpper([]byte{ref})[0], Edits: []byte{}, Pos: pos,
-		Counter:  map[byte]int{'A': 0, 'T': 0, 'C': 0, 'G': 0},
-		Variants: map[byte]int{'A': 0, 'T': 0, 'C': 0, 'G': 0},
+		Counter:  map[byte]int{},
+		Variants: map[byte]int{},
 		Strand:   "", Qualities: []byte{}, Total: 0,
 	}
 }
 
+// AddReads as name says add record to this genomic position
 func (e *EditsInfo) AddReads(record *Record, at int) {
 
-	if at < conf.MinBasePosition || (conf.MaxBasePosition > 0 && at > conf.MaxBasePosition) {
+	if at < conf.MinBasePosition || (conf.MaxBasePosition > 0 && record.QueryLength-at < conf.MaxBasePosition) {
 		//sugar.Debugf("failed at base position: %v, min: %v; max: %v", at, conf.MinBasePosition, conf.MaxBasePosition)
 		return
 	}
@@ -312,17 +325,20 @@ func (e *EditsInfo) AddReads(record *Record, at int) {
 
 	seq := record.SeqAt(at)
 
-	if _, ok := e.Counter[seq]; !ok {
-		e.Counter[seq] = 0
-	}
+	if seq != 'N' && e.Ref != 'N' {
+		if _, ok := e.Counter[seq]; !ok {
+			e.Counter[seq] = 0
+		}
 
-	if seq != 'N' {
 		e.Counter[seq]++
 		e.Qualities = append(e.Qualities, record.QualityAt(at)) //
 		e.Edits = append(e.Edits, bytes.ToUpper([]byte{seq})[0])
 		e.Strand += record.Strand()
 
 		if e.Ref != seq {
+			if _, ok := e.Variants[seq]; !ok {
+				e.Variants[seq] = 0
+			}
 			e.Variants[seq]++
 		}
 	}
@@ -330,6 +346,7 @@ func (e *EditsInfo) AddReads(record *Record, at int) {
 	e.Total++
 }
 
+// MeanQ as name says, return mean quality of add reads
 func (e *EditsInfo) MeanQ() float64 {
 	res := 0.0
 	for _, i := range e.Qualities {
@@ -341,6 +358,10 @@ func (e *EditsInfo) MeanQ() float64 {
 
 // Valid is function that check whether this edits info is valid
 func (e *EditsInfo) Valid() bool {
+	if e.Ref == 'N' {
+		return false
+	}
+
 	if e.MeanQ()-float64(conf.MinReadQuality) < 0 {
 		return false
 	}
@@ -349,20 +370,14 @@ func (e *EditsInfo) Valid() bool {
 		return false
 	}
 
-	if conf.MaxEditsPerNucleotide > 0 && len(e.Counter) >= conf.MaxEditsPerNucleotide {
-		return false
-	}
-
 	numOfEdits := 0
-	for _, edit := range e.Edits {
-		if edit != e.Ref {
-			if c, ok := e.Variants[edit]; ok {
-				if c > 0 && c < conf.MinEditsPerNucleotide {
-					return false
-				}
-				numOfEdits += c
-			}
+	for _, edit := range e.Variants {
+		// sugar.Infof("%s - %s: %d", string(e.Ref), string(seq), edit)
+
+		if edit < conf.MinEditsPerNucleotide || (conf.MaxEditsPerNucleotide > 0 && edit > conf.MaxEditsPerNucleotide) {
+			return false
 		}
+		numOfEdits += edit
 	}
 
 	if numOfEdits < conf.MinEdits {
@@ -387,6 +402,7 @@ func (e *EditsInfo) variantsStr() (string, string) {
 	return strings.Join(seqs, ","), strings.Join(frequencies, ",")
 }
 
+// GetStrand as name says, calculate the strand based on all aligned reads
 func (e *EditsInfo) GetStrand() string {
 
 	if !conf.Dna {
@@ -418,30 +434,30 @@ func (e *EditsInfo) String() string {
 	}, "\t")
 }
 
-//structure for timer
+//TicTocTimer is structure for timer
 type TicTocTimer struct {
 	duration time.Duration
 	start    time.Time
 	repeats  int64
 }
 
-//constructor with default values for timer
+//InitTimer is constructor with default values for timer
 func InitTimer() *TicTocTimer {
 	return &TicTocTimer{duration: 0, start: time.Now(), repeats: 0}
 }
 
-//start timer
+// Tic is start timer
 func (timer *TicTocTimer) Tic() {
 	timer.start = time.Now()
 }
 
-//pause timer
+//Toc is pause timer
 func (timer *TicTocTimer) Toc() {
 	timer.duration += time.Now().Sub(timer.start)
 	timer.repeats++
 }
 
-//total time of timer
+//TicToc is total time of timer
 func (timer *TicTocTimer) TicToc() time.Duration {
 	return timer.duration
 }

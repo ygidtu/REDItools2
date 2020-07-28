@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/biogo/hts/bam"
-	"github.com/biogo/hts/bgzf"
 	"os"
 	"strings"
 	"sync"
@@ -43,7 +42,7 @@ func workerFast(
 		}
 		//defer bamReader.Close()
 
-		iter, err := bam.NewIterator(bamReader, []bgzf.Chunk{ref.Chunks})
+		iter, err := bam.NewIterator(bamReader, ref.Chunks)
 		if err != nil {
 			sugar.Fatal(err)
 		}
