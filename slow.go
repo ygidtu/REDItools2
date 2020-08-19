@@ -1,11 +1,12 @@
 package main
 
 import (
-	"github.com/biogo/hts/bam"
-	"github.com/golang-collections/collections/set"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/biogo/hts/bam"
+	"github.com/golang-collections/collections/set"
 )
 
 func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPositions, splicePositions, targetPositions map[string]*set.Set) {
@@ -78,46 +79,14 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 				continue
 			}
 
-			//// INDEX keep the position of record base position
-			//// START keep the genomic position
-			//start, index := record.Start, 0
-			//for _, i := range record.Cigar {
-			//	if i.Type() != sam.CigarDeletion &&
-			//		i.Type() != sam.CigarHardClipped &&
-			//		i.Type() != sam.CigarInsertion {
-			//
-			//		if i.Type() == sam.CigarMatch {
-			//			for j := 0; j < i.Len(); j++ {
-			//
-			//				if _, ok := edits[start]; !ok {
-			//					edits[start] = NewEditsInfo(ref.Chrom, chrRef[start], start + 1)
-			//				}
-			//
-			//				edits[start].AddReads(record, index)
-			//
-			//				index++
-			//				start++
-			//			}
-			//		} else {
-			//			if i.Type() != sam.CigarSoftClipped {
-			//				start += i.Len()
-			//			}
-			//
-			//			if i.Type() != sam.CigarSkipped {
-			//				index += i.Len()
-			//			}
-			//		}
-			//	}
-			//}
-
 			edits = updateEdits(edits, record, chrRef, ref.Chrom)
 
-			if record.Start > lastEnd {
-				getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
+			// if record.Start > lastEnd {
+			// 	getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
 
-				edits = make(map[int]*EditsInfo)
-				lastEnd = record.End
-			}
+			// 	edits = make(map[int]*EditsInfo)
+			// 	lastEnd = record.End
+			// }
 		}
 
 		getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)

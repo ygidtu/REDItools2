@@ -135,7 +135,7 @@ func main() {
 	w := make(chan string)
 
 	if conf.Mode {
-		fastMode(&wg, w, omopolymericPositions, spicePositions, targetPositions)
+		slowMode(&wg, w, omopolymericPositions, spicePositions, targetPositions)
 	} else {
 		slowMode(&wg, w, omopolymericPositions, spicePositions, targetPositions)
 	}

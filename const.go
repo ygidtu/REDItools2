@@ -22,7 +22,7 @@ var region *Region
 
 const (
 	// VERSION is just the version number
-	VERSION = "0.1.0"
+	VERSION = "0.1.1"
 
 	// DefaultBaseQuality as name says
 	DefaultBaseQuality = 30
@@ -281,6 +281,29 @@ func complement(sequence byte) byte {
 // SeqAt is used to return base in this position
 func (r *Record) SeqAt(i int) byte {
 	return r.Seq.At(i)
+}
+
+// QueryEnd is the max matched genomic site
+func (r *Record) QueryEnd() int {
+	start := r.Start
+	for _, i := range r.Cigar {
+
+		if i.Type() != sam.CigarDeletion &&
+			i.Type() != sam.CigarHardClipped &&
+			i.Type() != sam.CigarInsertion {
+
+			if i.Type() == sam.CigarMatch {
+				for j := 0; j < i.Len(); j++ {
+					start++
+				}
+			} else {
+				if i.Type() != sam.CigarSoftClipped {
+					start += i.Len()
+				}
+			}
+		}
+	}
+	return start
 }
 
 // EditsInfo is struct that keep the information for all reads that aligned to this position

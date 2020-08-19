@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/biogo/hts/bam"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/biogo/hts/bam"
 
 	"github.com/golang-collections/collections/set"
 )
@@ -65,12 +66,12 @@ func workerFast(
 			}
 
 			edits = updateEdits(edits, record, chrRef, ref.Ref)
-			if record.Start > lastEnd {
-				getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
+			// if record.Start > lastEnd {
+			// 	getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
 
-				edits = make(map[int]*EditsInfo)
-				lastEnd = record.End
-			}
+			// 	edits = make(map[int]*EditsInfo)
+			// 	lastEnd = record.End
+			// }
 		}
 
 		iter.Close()

@@ -13,6 +13,8 @@ A go version of REDItools2
 
 ---
 
+The --fast may cause different errors based on different sorting algorithms, so it's disabled now.
+
 **REDItools2** is the optimized, parallel multi-node version of [<i class="icon-link"></i> REDItools](https://github.com/BioinfoUNIBA/REDItools).
 
 REDItools takes in input a RNA-Seq (or DNA-Seq BAM) file and outputs a table of RNA-Seq editing events.  Here is an example of REDItools's output:

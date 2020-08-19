@@ -207,7 +207,7 @@ func createOmopolymericPositions() error {
 					var last alphabet.Letter
 					for i, b := range s.Seq {
 						if b == last {
-							equals ++
+							equals++
 						} else {
 							if equals >= conf.OmopolymericSpan {
 
@@ -458,7 +458,7 @@ func splitRegion(end, chunks int) []int {
 
 // adjustRegion is used to move the end site a little backwards
 func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *bam.Reader) ([]*ChanChunk, error) {
-	
+
 	res := make([]*ChanChunk, 0, 0)
 
 	if len(regions) == 2 {
@@ -486,7 +486,7 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 			End:    regions[1],
 			Chunks: chunks,
 		})
-		
+
 	} else {
 		for i := 0; i < len(regions); i++ {
 			if i > 0 && i < len(regions)-1 {
@@ -496,50 +496,51 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 					// return res, errors.Wrapf(err, "failed before adjust %s: %d - %d", ref.Name(), region[i], region[i+1])
 					continue
 				}
-	
+
 				if len(chunks) == 0 {
 					continue
 				}
-	
+
 				iter, err := bam.NewIterator(bamReader, chunks)
 				if err != nil {
 					return res, err
 				}
 				defer iter.Close()
-	
+
 				lastEnd := 0
 				for iter.Next() {
-					record := iter.Record()
-	
+					rec := iter.Record()
+					record := NewRecord(rec)
+
 					if lastEnd == 0 {
-						lastEnd = record.End()
-					} else if record.Start() > lastEnd {
+						lastEnd = record.QueryEnd()
+					} else if record.Start > lastEnd {
 						break
 					} else {
-						lastEnd = record.End()
+						lastEnd = record.QueryEnd()
 					}
 				}
-	
+
 				if lastEnd > 0 {
 					regions[i] = lastEnd
 				}
 			}
 		}
-	
+
 		for i := 1; i < len(regions); i++ {
 			// avoid duplicated regions
 			if regions[i-1] > regions[i] {
 				regions[i] = regions[i-1]
 				continue
 			}
-	
+
 			chunks, err := idx.Chunks(ref, regions[i-1], regions[i])
 			if err != nil {
 				continue
 				// return res, errors.Wrapf(err, "failed after adjust %s: %d - %d", ref.Name(), region[i-1], region[i])
 			}
 			//res = append(res, chunks...)
-	
+
 			res = append(res, &ChanChunk{
 				Ref:    ref.Name(),
 				Start:  regions[i-1],
@@ -594,7 +595,7 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 			if region.End != 0 {
 				length = region.End
 			}
-			
+
 			for _, i := range splitRegion(length-region.Start, maxInt(conf.Process, 1)) {
 				regions = append(regions, region.Start+i)
 			}
@@ -610,7 +611,7 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 		if err != nil {
 			sugar.Errorf("failted to make chunks of %s: %v", ref.Name(), err)
 		}
-		
+
 		if len(temp) == 0 {
 			continue
 		}
