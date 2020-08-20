@@ -460,94 +460,63 @@ func splitRegion(end, chunks int) []int {
 func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *bam.Reader) ([]*ChanChunk, error) {
 
 	res := make([]*ChanChunk, 0, 0)
+	start := regions[0]
+	end := regions[len(regions)-1]
+	bk := (end - start) / maxInt(conf.Process, 1)
 
-	if len(regions) == 2 {
-		// sugar.Debugf("len(regions): %d", len(regions))
-		chunks, err := idx.Chunks(ref, regions[0], regions[1])
-		if err != nil {
-			stats, ok := idx.ReferenceStats(ref.ID())
-			sugar.Debugf("stats: %v", stats)
-			if ok {
-				sugar.Debugf("stats: %v", stats)
-				chunks = []bgzf.Chunk{stats.Chunk}
-			} else {
-				sugar.Debugf("Ref: %s, regions: %v", ref.Name(), regions)
-				return res, nil
-			}
+	adjustRegions := make([]int, 0, 0)
+	for start < end {
+		adjustRegions = append(adjustRegions, start)
+		start += bk
 
+		if start+bk > end {
+			adjustRegions = append(adjustRegions, end)
+			break
 		}
 
-		// sugar.Debugf("len(chunks): %d", len(chunks))
-		// sugar.Debugf("len(chunks): %v", chunks[0])
+		chunks, err := idx.Chunks(ref, start, end)
+		if err != nil {
+			sugar.Debugf("%v", regions)
+			continue
+		}
+
+		if len(chunks) == 0 {
+			continue
+		}
+
+		iter, err := bam.NewIterator(bamReader, chunks)
+		if err != nil {
+			return res, err
+		}
+		defer iter.Close()
+
+		var last *Record
+		for iter.Next() {
+			rec := iter.Record()
+			record := NewRecord(rec)
+
+			if last != nil && record.Start > last.End {
+				adjustRegions = append(adjustRegions, last.End)
+				start = record.Start
+				break
+			}
+			last = record
+		}
+	}
+
+	sugar.Info(ref.Name(), adjustRegions)
+	for i := 0; i < len(adjustRegions); i += 2 {
+		chunks, err := idx.Chunks(ref, adjustRegions[i], adjustRegions[i+1])
+		if err != nil {
+			continue
+		}
 
 		res = append(res, &ChanChunk{
 			Ref:    ref.Name(),
-			Start:  regions[0],
-			End:    regions[1],
+			Start:  adjustRegions[i],
+			End:    adjustRegions[i+1],
 			Chunks: chunks,
 		})
-
-	} else {
-		for i := 0; i < len(regions); i++ {
-			if i > 0 && i < len(regions)-1 {
-				chunks, err := idx.Chunks(ref, regions[i], regions[i+1])
-				if err != nil {
-					sugar.Debugf("%v", regions)
-					// return res, errors.Wrapf(err, "failed before adjust %s: %d - %d", ref.Name(), region[i], region[i+1])
-					continue
-				}
-
-				if len(chunks) == 0 {
-					continue
-				}
-
-				iter, err := bam.NewIterator(bamReader, chunks)
-				if err != nil {
-					return res, err
-				}
-				defer iter.Close()
-
-				lastEnd := 0
-				for iter.Next() {
-					rec := iter.Record()
-					record := NewRecord(rec)
-
-					if lastEnd == 0 {
-						lastEnd = record.QueryEnd()
-					} else if record.Start > lastEnd {
-						break
-					} else {
-						lastEnd = record.QueryEnd()
-					}
-				}
-
-				if lastEnd > 0 {
-					regions[i] = lastEnd
-				}
-			}
-		}
-
-		for i := 1; i < len(regions); i++ {
-			// avoid duplicated regions
-			if regions[i-1] > regions[i] {
-				regions[i] = regions[i-1]
-				continue
-			}
-
-			chunks, err := idx.Chunks(ref, regions[i-1], regions[i])
-			if err != nil {
-				continue
-				// return res, errors.Wrapf(err, "failed after adjust %s: %d - %d", ref.Name(), region[i-1], region[i])
-			}
-			//res = append(res, chunks...)
-
-			res = append(res, &ChanChunk{
-				Ref:    ref.Name(),
-				Start:  regions[i-1],
-				End:    regions[i],
-				Chunks: chunks,
-			})
-		}
 	}
 
 	return res, nil
@@ -590,15 +559,13 @@ func fetchBamRefsFast() (map[string][]*ChanChunk, error) {
 
 		regions := make([]int, 0, 0)
 		if region.Empty() {
-			regions = splitRegion(length, maxInt(conf.Process, 1))
+			regions = append(regions, []int{0, length}...)
 		} else if ref.Name() == region.Chrom {
 			if region.End != 0 {
 				length = region.End
 			}
 
-			for _, i := range splitRegion(length-region.Start, maxInt(conf.Process, 1)) {
-				regions = append(regions, region.Start+i)
-			}
+			regions = append(regions, []int{region.Start, length}...)
 		} else {
 			continue
 		}

@@ -79,14 +79,24 @@ func worker(wg *sync.WaitGroup, refs chan *Region, w chan string, omopolymericPo
 				continue
 			}
 
+			if record.Start > lastEnd {
+				// if _, ok := edits[139102424]; ok {
+				// 	sugar.Infof("%d %s", lastEnd, record)
+				// }
+				getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
+
+				edits = make(map[int]*EditsInfo)
+			}
+
 			edits = updateEdits(edits, record, chrRef, ref.Chrom)
 
-			// if record.Start > lastEnd {
-			// 	getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
-
-			// 	edits = make(map[int]*EditsInfo)
-			// 	lastEnd = record.End
+			// if record.End > 139102424 && record.Start < 139102424 {
+			// 	sugar.Info(record)
 			// }
+
+			if record.End > lastEnd {
+				lastEnd = record.End
+			}
 		}
 
 		getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)

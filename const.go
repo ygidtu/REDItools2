@@ -22,7 +22,7 @@ var region *Region
 
 const (
 	// VERSION is just the version number
-	VERSION = "0.1.1"
+	VERSION = "0.1.2"
 
 	// DefaultBaseQuality as name says
 	DefaultBaseQuality = 30
@@ -131,32 +131,6 @@ type ChanChunk struct {
 	Start  int
 	End    int
 	Chunks []bgzf.Chunk
-}
-
-// ToRegion as name says
-func (c *ChanChunk) ToRegion() *Region {
-	return &Region{
-		Chrom: c.Ref,
-		Start: c.Start,
-		End:   c.End,
-	}
-}
-
-// SwitchRegion is add or remove chr from chromosome
-func (c *ChanChunk) SwitchRegion() *Region {
-	ref := c.Ref
-
-	if strings.HasPrefix(ref, "chr") {
-		ref = strings.ReplaceAll(ref, "chr", "")
-	} else {
-		ref = "chr" + ref
-	}
-
-	return &Region{
-		Chrom: ref,
-		Start: c.Start,
-		End:   c.End,
-	}
 }
 
 // Omopolymeric is struct handle the Omopolymeric data
@@ -281,29 +255,6 @@ func complement(sequence byte) byte {
 // SeqAt is used to return base in this position
 func (r *Record) SeqAt(i int) byte {
 	return r.Seq.At(i)
-}
-
-// QueryEnd is the max matched genomic site
-func (r *Record) QueryEnd() int {
-	start := r.Start
-	for _, i := range r.Cigar {
-
-		if i.Type() != sam.CigarDeletion &&
-			i.Type() != sam.CigarHardClipped &&
-			i.Type() != sam.CigarInsertion {
-
-			if i.Type() == sam.CigarMatch {
-				for j := 0; j < i.Len(); j++ {
-					start++
-				}
-			} else {
-				if i.Type() != sam.CigarSoftClipped {
-					start += i.Len()
-				}
-			}
-		}
-	}
-	return start
 }
 
 // EditsInfo is struct that keep the information for all reads that aligned to this position

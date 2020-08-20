@@ -55,6 +55,10 @@ func workerFast(
 		for iter.Next() {
 			record := NewRecord(iter.Record())
 
+			if record.Start < ref.Start && record.End > ref.End {
+				continue
+			}
+
 			if lastEnd == 0 {
 				lastEnd = record.End
 			}
@@ -65,13 +69,22 @@ func workerFast(
 				continue
 			}
 
-			edits = updateEdits(edits, record, chrRef, ref.Ref)
-			// if record.Start > lastEnd {
-			// 	getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
+			if record.Start > lastEnd {
 
-			// 	edits = make(map[int]*EditsInfo)
-			// 	lastEnd = record.End
-			// }
+				if _, ok := edits[151678717]; ok {
+					sugar.Infof("lastEnd: %d; record: %v; total: %d; ref: %v", lastEnd, record, total, ref)
+				}
+
+				getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
+
+				edits = make(map[int]*EditsInfo)
+			}
+
+			edits = updateEdits(edits, record, chrRef, ref.Ref)
+
+			if record.End > lastEnd {
+				lastEnd = record.End
+			}
 		}
 
 		iter.Close()
