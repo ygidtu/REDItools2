@@ -92,7 +92,7 @@ func normByStrand(seqParam []byte, strandParam string, sequalParam []byte, infer
 		}
 	}
 
-	return seq, strings.Join(strand, ""), qual
+	return seq, vStrand(strings.Join(strand, "")), qual
 }
 
 func frequency(data []string) map[string]int {
