@@ -22,7 +22,7 @@ var region *Region
 
 const (
 	// VERSION is just the version number
-	VERSION = "0.1.2"
+	VERSION = "0.1.3"
 
 	// DefaultBaseQuality as name says
 	DefaultBaseQuality = 30
@@ -262,7 +262,7 @@ type EditsInfo struct {
 	LastChr   string
 	Ref       byte
 	Pos       int
-	Edits     []byte
+	Edits     []byte // slice of upper case base from reads in this position
 	Counter   map[byte]int
 	Variants  map[byte]int
 	Strand    string
@@ -386,7 +386,7 @@ func (e *EditsInfo) GetStrand() string {
 		}
 
 		if (strand == "+" || strand == "-") && conf.StrandCorrection {
-			e.Edits, strand, e.Qualities = normByStrand(e.Edits, strand, e.Qualities)
+			e.Edits, strand, e.Qualities = normByStrand(e.Edits, e.Strand, e.Qualities, strand)
 		}
 
 		return strand

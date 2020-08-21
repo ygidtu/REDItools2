@@ -76,14 +76,18 @@ func complementAll(sequence []byte) []byte {
 	return res
 }
 
-func normByStrand(seqParam []byte, strandParam string, sequalParam []byte) ([]byte, string, []byte) {
-
+func normByStrand(seqParam []byte, strandParam string, sequalParam []byte, inferStrand string) ([]byte, string, []byte) {
+	strands := []byte(strandParam)
 	seq, strand, qual := make([]byte, 0, 0), make([]string, 0, 0), make([]byte, 0, 0)
 
+	if len(strands) != len(seqParam) {
+		sugar.Fatalf("strandParam: %v; seqParam: %v", strands, seqParam)
+	}
+
 	for i, j := range seqParam {
-		if strandParam[i] == j {
+		if string(strands[i]) == inferStrand {
 			seq = append(seq, j)
-			strand = append(strand, string(strandParam[i]))
+			strand = append(strand, string(strands[i]))
 			qual = append(qual, sequalParam[i])
 		}
 	}

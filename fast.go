@@ -70,11 +70,6 @@ func workerFast(
 			}
 
 			if record.Start > lastEnd {
-
-				if _, ok := edits[151678717]; ok {
-					sugar.Infof("lastEnd: %d; record: %v; total: %d; ref: %v", lastEnd, record, total, ref)
-				}
-
 				getColumn(edits, []map[string]*set.Set{omopolymericPositions, splicePositions}, targetPositions, w)
 
 				edits = make(map[int]*EditsInfo)

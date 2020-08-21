@@ -500,11 +500,12 @@ func adjustRegion(regions []int, idx *bam.Index, ref *sam.Reference, bamReader *
 				start = record.Start
 				break
 			}
-			last = record
+			if last == nil || record.End > last.End {
+				last = record
+			}
 		}
 	}
 
-	sugar.Info(ref.Name(), adjustRegions)
 	for i := 0; i < len(adjustRegions); i += 2 {
 		chunks, err := idx.Chunks(ref, adjustRegions[i], adjustRegions[i+1])
 		if err != nil {
