@@ -22,7 +22,7 @@ var region *Region
 
 const (
 	// VERSION is just the version number
-	VERSION = "0.1.3"
+	VERSION = "0.1.4"
 
 	// DefaultBaseQuality as name says
 	DefaultBaseQuality = 30
@@ -361,28 +361,23 @@ func (e *EditsInfo) Valid() bool {
 	return true
 }
 
-func mean(data []float64) float64 {
-	res := 0.0
-	for _, i := range data {
-		res += float64(i)
-	}
-
-	return res / float64(maxInt(len(data), 1))
-}
-
 func (e *EditsInfo) variantsStr() (string, string) {
 
 	seqs := make([]string, 0, 0)
-	frequencies := make([]float64, 0, 0)
+	frequencies := 0
 
 	for key, val := range e.Variants {
 		if key != e.Ref && val > 0 {
 			seqs = append(seqs, string(e.Ref)+string(key))
-			frequencies = append(frequencies, float64(val)/float64(maxInt(e.Total, 1)))
+			frequencies += val
 		}
 	}
 
-	return strings.Join(seqs, " "), fmt.Sprintf("%.2f", mean(frequencies))
+	if e.Pos == 43175103 {
+		sugar.Infof("%s - %f - %f", seqs, e.Total, frequencies)
+	}
+
+	return strings.Join(seqs, " "), fmt.Sprintf("%.2f", float64(frequencies)/float64(maxInt(e.Total, 1)))
 }
 
 // GetStrand as name says, calculate the strand based on all aligned reads
