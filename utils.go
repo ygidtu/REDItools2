@@ -39,6 +39,10 @@ func vStrand(strands string) string {
 		data[j]++
 	}
 
+	if data['+'] == data['-'] {
+		return "*"
+	}
+
 	if conf.StrandConfidence != 0 {
 		if prop(data['+']+data['-'], data['+']) >= conf.StrandConfidenceValue {
 			return "+"

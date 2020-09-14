@@ -43,5 +43,9 @@ func filterReads(record *Record) bool {
 		return false
 	}
 
+	if tag, ok := record.Record.Tag([]byte("NH")); ok {
+		return tag.Value().(uint8) <= 1
+	}
+
 	return true
 }

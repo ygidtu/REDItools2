@@ -61,6 +61,7 @@ type config struct {
 	RemoveHeader           bool    `goptions:"-H, --remove-header, description='Do not include header in output file'"`
 	Dna                    bool    `goptions:"-N, --dna, description='Run REDItools 2.0 on DNA-Seq data'"`
 	BedFile                string  `goptions:"-B, --bed_file, description='Path of BED file containing target regions'"`
+	StrandCode             string  `goptions:"--strand-code, description='The strand determinthon mode, should be 0, 1, 2, 12'"`
 
 	Log  string        `goptions:"--log, description='Save log to file'"`
 	Help goptions.Help `goptions:"--help, description='Show this help'"`
@@ -222,6 +223,67 @@ func (r *Record) IsReverse() bool {
 
 // Strand is function that calculate the strand based on read1/read2 and reverse
 func (r *Record) Strand() string {
+
+	if conf.StrandCode != "" {
+		unchange1, unchange2 := -1, -1
+		switch conf.StrandCode {
+		case "0":
+			{
+				unchange1, unchange2 = 0, 0
+			}
+		case "1":
+			{
+				unchange1, unchange2 = 1, 0
+			}
+		case "2":
+			{
+				unchange1, unchange2 = 0, 1
+			}
+		case "12":
+			{
+				unchange1, unchange2 = 1, 1
+			}
+		}
+
+		if unchange1 != -1 || unchange2 != -1 {
+			if r.IsRead1() {
+				if unchange1 > 0 {
+					if r.IsReverse() {
+						return "-"
+					}
+					return "+"
+				} else if unchange1 == 0 {
+					if r.IsReverse() {
+						return "+"
+					}
+					return "-"
+				}
+			} else if r.IsRead2() {
+				if unchange2 > 0 {
+					if r.IsReverse() {
+						return "-"
+					}
+					return "+"
+				} else if unchange2 == 0 {
+					if r.IsReverse() {
+						return "+"
+					}
+					return "-"
+				}
+			} else {
+				if unchange1 > 0 {
+					if r.IsReverse() {
+						return "-"
+					}
+					return "+"
+				}
+				if r.IsReverse() {
+					return "+"
+				}
+				return "-"
+			}
+		}
+	}
 
 	if r.IsRead2() {
 		if (conf.Strand == 2 && r.IsReverse()) || (conf.Strand != 2 && !r.IsReverse()) {
